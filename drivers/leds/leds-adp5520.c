@@ -86,7 +86,7 @@ static int adp5520_led_setup(struct adp5520_led *led)
 
 static int adp5520_led_prepare(struct platform_device *pdev)
 {
-	struct adp5520_leds_platform_data *pdata = pdev->dev.platform_data;
+	struct adp5520_leds_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct device *dev = pdev->dev.parent;
 	int ret = 0;
 
@@ -102,7 +102,7 @@ static int adp5520_led_prepare(struct platform_device *pdev)
 
 static int adp5520_led_probe(struct platform_device *pdev)
 {
-	struct adp5520_leds_platform_data *pdata = pdev->dev.platform_data;
+	struct adp5520_leds_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct adp5520_led *led, *led_dat;
 	struct led_info *cur_led;
 	int ret, i;
@@ -184,7 +184,7 @@ err:
 
 static int adp5520_led_remove(struct platform_device *pdev)
 {
-	struct adp5520_leds_platform_data *pdata = pdev->dev.platform_data;
+	struct adp5520_leds_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct adp5520_led *led;
 	int i;
 

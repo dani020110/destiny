@@ -10,6 +10,7 @@ Each child has own specific current settings
 - max-cur: Maximun current at each led channel.
 
 Optional properties:
+- enable-gpio: GPIO attached to the chip's enable pin
 - label: Used for naming LEDs
 
 Alternatively, each child can have a specific channel name and trigger:

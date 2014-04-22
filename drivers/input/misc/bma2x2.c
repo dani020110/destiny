@@ -30,12 +30,13 @@
 #include <linux/delay.h>
 #include <asm/irq.h>
 //#include <asm/mach/irq.h>
+#include <linux/regulator/consumer.h>
+#include <linux/of_gpio.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
 #include <linux/of.h>
-#include <linux/of_gpio.h>
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
@@ -1359,6 +1360,13 @@ static const struct interrupt_map_t int_map[] = {
 
 #endif/*End of CONFIG_SENSORS_BMI058*/
 
+/*BMA power supply VDD 1.62V-3.6V VIO 1.2-3.6V */
+#define BMA2x2_VDD_MIN_UV       2000000
+#define BMA2x2_VDD_MAX_UV       3400000
+#define BMA2x2_VIO_MIN_UV       1500000
+#define BMA2x2_VIO_MAX_UV       3400000
+
+static bool skip_pwr_ctl;
 
 struct bma2x2_type_map_t {
 
@@ -1381,19 +1389,6 @@ static const struct bma2x2_type_map_t sensor_type_map[] = {
 	{BMA280_CHIP_ID, BMA280_TYPE, "BMA280"},
 
 };
-
-/*!
-* Bst sensor common definition,
-* please give parameters in BSP file.
-*/
-struct bosch_sensor_specific {
-	char *name;
-	/* 0 to 7 */
-	int place;
-	int irq;
-	int (*irq_gpio_cfg)(void);
-};
-
 
 /*!
  * we use a typedef to hide the detail,
@@ -1433,6 +1428,14 @@ struct bma2x2acc {
 	s16 z;
 };
 
+struct bma2x2_platform_data {
+	int poll_interval;
+	int gpio_int1;
+	int gpio_int2;
+	u8 place;
+	bool use_int;
+};
+
 struct bma2x2_data {
 	struct i2c_client *bma2x2_client;
 	atomic_t delay;
@@ -1459,16 +1462,17 @@ struct bma2x2_data {
 	struct mutex mode_mutex;
 	struct delayed_work work;
 	struct work_struct irq_work;
+	struct regulator *vdd;
+	struct regulator *vio;
+	bool power_enabled;
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
 #endif
 	int IRQ;
-	struct bosch_sensor_specific *bst_pd;
+	struct bma2x2_platform_data *pdata;
 
 	int ref_count;
 	struct input_dev *dev_interrupt;
-
-	unsigned int int_pin; //CONN-EC-SensorPorting-01+
 
 #ifdef CONFIG_SIG_MOTION
 	struct class *g_sensor_class;
@@ -1548,11 +1552,6 @@ static void bma2x2_remap_sensor_data(struct bma2x2acc *val,
 {
 	struct bosch_sensor_data bsd;
 
-	if ((NULL == client_data->bst_pd) ||
-			(BOSCH_SENSOR_PLACE_UNKNOWN
-			 == client_data->bst_pd->place))
-		return;
-
 #ifdef CONFIG_SENSORS_BMI058
 /*x,y need to be invesed becase of HW Register for BMI058*/
 	bsd.y = val->x;
@@ -1565,7 +1564,7 @@ static void bma2x2_remap_sensor_data(struct bma2x2acc *val,
 #endif
 
 	bst_remap_sensor_data_dft_tab(&bsd,
-			client_data->bst_pd->place);
+			client_data->pdata->place);
 
 	val->x = bsd.x;
 	val->y = bsd.y;
@@ -5013,8 +5012,7 @@ static ssize_t bma2x2_place_show(struct device *dev,
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 	int place = BOSCH_SENSOR_PLACE_UNKNOWN;
 
-	if (NULL != bma2x2->bst_pd)
-		place = bma2x2->bst_pd->place;
+	place = bma2x2->pdata->place;
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", place);
 }
@@ -5448,19 +5446,16 @@ static ssize_t bma2x2_fifo_data_sel_show(struct device *dev,
 #endif
 
 	/*remaping fifo_dat_sel if define virtual place in BSP files*/
-	if ((NULL != bma2x2->bst_pd) &&
-		(BOSCH_SENSOR_PLACE_UNKNOWN != bma2x2->bst_pd->place)) {
-		place = bma2x2->bst_pd->place;
-		/* sensor with place 0 needs not to be remapped */
-		if ((place > 0) && (place < MAX_AXIS_REMAP_TAB_SZ)) {
-			/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
-			* but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
-			* so we need to +1*/
-			if (BMA2X2_FIFO_DAT_SEL_X == data)
-				data = bst_axis_remap_tab_dft[place].src_x + 1;
-			else if (BMA2X2_FIFO_DAT_SEL_Y == data)
-				data = bst_axis_remap_tab_dft[place].src_y + 1;
-		}
+	place = bma2x2->pdata->place;
+	/* sensor with place 0 needs not to be remapped */
+	if ((place > 0) && (place < MAX_AXIS_REMAP_TAB_SZ)) {
+		/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
+		* but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
+		* so we need to +1*/
+		if (BMA2X2_FIFO_DAT_SEL_X == data)
+			data = bst_axis_remap_tab_dft[place].src_x + 1;
+		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+			data = bst_axis_remap_tab_dft[place].src_y + 1;
 	}
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", data);
@@ -5536,27 +5531,24 @@ static ssize_t bma2x2_fifo_data_sel_store(struct device *dev,
 	bma2x2->fifo_datasel = (unsigned char) data;
 
 	/*remaping fifo_dat_sel if define virtual place*/
-	if ((NULL != bma2x2->bst_pd) &&
-		(BOSCH_SENSOR_PLACE_UNKNOWN != bma2x2->bst_pd->place)) {
-		place = bma2x2->bst_pd->place;
-		/* sensor with place 0 needs not to be remapped */
-		if ((place > 0) && (place < MAX_AXIS_REMAP_TAB_SZ)) {
-			/*Need X Y axis revesal sensor place: P1, P3, P5, P7 */
-			/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
-			  * but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
-			  * so we need to +1*/
-			if (BMA2X2_FIFO_DAT_SEL_X == data)
-				data =  bst_axis_remap_tab_dft[place].src_x + 1;
-			else if (BMA2X2_FIFO_DAT_SEL_Y == data)
-				data =  bst_axis_remap_tab_dft[place].src_y + 1;
-		}
+	place = bma2x2->pdata->place;
+	/* sensor with place 0 needs not to be remapped */
+	if ((place > 0) && (place < MAX_AXIS_REMAP_TAB_SZ)) {
+		/*Need X Y axis revesal sensor place: P1, P3, P5, P7 */
+		/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
+		  * but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
+		  * so we need to +1*/
+		if (BMA2X2_FIFO_DAT_SEL_X == data)
+			data =  bst_axis_remap_tab_dft[place].src_x + 1;
+		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+			data =  bst_axis_remap_tab_dft[place].src_y + 1;
 	}
 #ifdef CONFIG_SENSORS_BMI058
 	/*Update BMI058 fifo_data_sel to the BMA2x2 common definition*/
-		if (BMA2X2_FIFO_DAT_SEL_X == data)
-			data = BMI058_FIFO_DAT_SEL_X;
-		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
-			data = BMI058_FIFO_DAT_SEL_Y;
+	if (BMA2X2_FIFO_DAT_SEL_X == data)
+		data = BMI058_FIFO_DAT_SEL_X;
+	else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+		data = BMI058_FIFO_DAT_SEL_Y;
 
 #endif
 	if (bma2x2_set_fifo_data_sel(bma2x2->bma2x2_client,
@@ -5578,46 +5570,40 @@ static ssize_t bma2x2_fifo_data_sel_store(struct device *dev,
 static void bma2x2_single_axis_remaping(unsigned char fifo_datasel,
 		unsigned char *remap_dir, struct bma2x2_data *client_data)
 {
-	if ((NULL == client_data->bst_pd) ||
-			(BOSCH_SENSOR_PLACE_UNKNOWN
-			 == client_data->bst_pd->place))
+	signed char place = client_data->pdata->place;
+	/* sensor with place 0 needs not to be remapped */
+	if ((place <= 0)  || (place >= MAX_AXIS_REMAP_TAB_SZ))
 		return;
-	else {
-		signed char place = client_data->bst_pd->place;
-		/* sensor with place 0 needs not to be remapped */
-		if ((place <= 0)  || (place >= MAX_AXIS_REMAP_TAB_SZ))
-			return;
 
-		if (fifo_datasel < 1 || fifo_datasel > 3)
-			return;
-		else {
-			switch (fifo_datasel) {
-			/*P2, P3, P4, P5 X axis(andorid) need to reverse*/
-			case BMA2X2_FIFO_DAT_SEL_X:
-				if (-1 == bst_axis_remap_tab_dft[place].sign_x)
-					*remap_dir = 1;
-				else
-					*remap_dir = 0;
-				break;
-			/*P1, P2, P5, P6 Y axis(andorid) need to reverse*/
-			case BMA2X2_FIFO_DAT_SEL_Y:
-				if (-1 == bst_axis_remap_tab_dft[place].sign_y)
-					*remap_dir = 1;
-				else
-					*remap_dir = 0;
-				break;
-			case BMA2X2_FIFO_DAT_SEL_Z:
-			/*P4, P5, P6, P7 Z axis(andorid) need to reverse*/
-				if (-1 == bst_axis_remap_tab_dft[place].sign_z)
-					*remap_dir = 1;
-				else
-					*remap_dir = 0;
-				break;
-			default:
-				break;
-			}
-		}
+	if (fifo_datasel < 1 || fifo_datasel > 3)
+		return;
+
+	switch (fifo_datasel) {
+	/*P2, P3, P4, P5 X axis(andorid) need to reverse*/
+	case BMA2X2_FIFO_DAT_SEL_X:
+		if (-1 == bst_axis_remap_tab_dft[place].sign_x)
+			*remap_dir = 1;
+		else
+			*remap_dir = 0;
+		break;
+	/*P1, P2, P5, P6 Y axis(andorid) need to reverse*/
+	case BMA2X2_FIFO_DAT_SEL_Y:
+		if (-1 == bst_axis_remap_tab_dft[place].sign_y)
+			*remap_dir = 1;
+		else
+			*remap_dir = 0;
+		break;
+	case BMA2X2_FIFO_DAT_SEL_Z:
+	/*P4, P5, P6, P7 Z axis(andorid) need to reverse*/
+		if (-1 == bst_axis_remap_tab_dft[place].sign_z)
+			*remap_dir = 1;
+		else
+			*remap_dir = 0;
+		break;
+	default:
+		break;
 	}
+
 
 	return;
 }
@@ -6526,23 +6512,6 @@ static irqreturn_t bma2x2_irq_handler(int irq, void *handle)
 }
 #endif /* defined(BMA2X2_ENABLE_INT1)||defined(BMA2X2_ENABLE_INT2) */
 
-static int bma2x2_parse_dt(struct device *dev,
-                struct bma2x2_data *pdata)
-{
-    unsigned int temp_val = 0;
-    struct device_node *np = dev->of_node;
-
-    pdata->int_pin = of_get_named_gpio_flags(np,"bosch,int_pin", 0, &temp_val);
-
-    pdata->bst_pd = kzalloc(sizeof(*pdata->bst_pd), GFP_KERNEL);
-
-    of_property_read_u32(np, "bosch,layout",&temp_val);
-    pdata->bst_pd->place = temp_val;
-
-	printk(KERN_INFO "%s: GPIO = %d, layout=%d\n", __func__, pdata->int_pin, pdata->bst_pd->place);
-	return 0;
-}
-
 static int bma2x2_pinctrl_init(struct bma2x2_data *data)
 {
     struct i2c_client *client = data->bma2x2_client;
@@ -6570,6 +6539,169 @@ static int bma2x2_pinctrl_init(struct bma2x2_data *data)
     return 0;
 }
 
+static int bma2x2_power_ctl(struct bma2x2_data *data, bool on)
+{
+	int ret = 0;
+	int err = 0;
+
+	if (skip_pwr_ctl)
+		return 0;
+ 
+	if (!on && data->power_enabled) {
+		ret = regulator_disable(data->vdd);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+				"Regulator vdd disable failed ret=%d\n", ret);
+			return ret;
+		}
+
+		ret = regulator_disable(data->vio);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+				"Regulator vio disable failed ret=%d\n", ret);
+			err = regulator_enable(data->vdd);
+			return ret;
+		}
+		data->power_enabled = on;
+	} else if (on && !data->power_enabled) {
+		ret = regulator_enable(data->vdd);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+				"Regulator vdd enable failed ret=%d\n", ret);
+			return ret;
+		}
+
+		ret = regulator_enable(data->vio);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+				"Regulator vio enable failed ret=%d\n", ret);
+			err = regulator_disable(data->vdd);
+			return ret;
+		}
+		data->power_enabled = on;
+	} else {
+		dev_info(&data->bma2x2_client->dev,
+				"Power on=%d. enabled=%d\n",
+				on, data->power_enabled);
+	}
+
+	return ret;
+}
+
+static int bma2x2_power_init(struct bma2x2_data *data)
+{
+	int ret;
+
+	data->vdd = regulator_get(&data->bma2x2_client->dev, "vdd");
+	if (IS_ERR(data->vdd)) {
+		ret = PTR_ERR(data->vdd);
+		dev_err(&data->bma2x2_client->dev,
+			"%s: Regulator get failed vdd ret=%d\n",
+			__func__, ret);
+		skip_pwr_ctl = true;
+	} else if (regulator_count_voltages(data->vdd) > 0) {
+		ret = regulator_set_voltage(data->vdd,
+				BMA2x2_VDD_MIN_UV,
+				BMA2x2_VDD_MAX_UV);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+				"Regulator set failed vdd ret=%d\n",
+				ret);
+			goto reg_vdd_put;
+		}
+	}
+
+	data->vio = regulator_get(&data->bma2x2_client->dev, "vio");
+	if (IS_ERR(data->vio)) {
+		ret = PTR_ERR(data->vio);
+		dev_err(&data->bma2x2_client->dev,
+			"%s: Regulator get failed vio ret=%d\n",
+			__func__, ret);
+		skip_pwr_ctl = true;
+	} else if (regulator_count_voltages(data->vio) > 0) {
+		ret = regulator_set_voltage(data->vio,
+				BMA2x2_VIO_MIN_UV,
+				BMA2x2_VIO_MAX_UV);
+		if (ret) {
+			dev_err(&data->bma2x2_client->dev,
+			"Regulator set failed vio ret=%d\n", ret);
+			goto reg_vio_put;
+		}
+	}
+
+	return 0;
+
+reg_vio_put:
+	regulator_put(data->vio);
+	if (regulator_count_voltages(data->vdd) > 0)
+		regulator_set_voltage(data->vdd, 0, BMA2x2_VDD_MAX_UV);
+reg_vdd_put:
+	regulator_put(data->vdd);
+	return ret;
+}
+
+static int bma2x2_power_deinit(struct bma2x2_data *data)
+{
+	if (regulator_count_voltages(data->vdd) > 0)
+		regulator_set_voltage(data->vdd,
+				0, BMA2x2_VDD_MAX_UV);
+
+	regulator_put(data->vdd);
+
+	if (regulator_count_voltages(data->vio) > 0)
+		regulator_set_voltage(data->vio,
+				0, BMA2x2_VIO_MAX_UV);
+
+	regulator_put(data->vio);
+
+	return 0;
+}
+
+#ifdef CONFIG_OF
+static int bma2x2_parse_dt(struct device *dev,
+			struct bma2x2_platform_data *pdata)
+{
+	struct device_node *np = dev->of_node;
+	u32 temp_val;
+	int rc;
+
+	rc = of_property_read_u32(np, "bosch,init-interval", &temp_val);
+	if (rc && (rc != -EINVAL)) {
+		dev_err(dev, "Unable to read init-interval\n");
+		return rc;
+	} else {
+		pdata->poll_interval = temp_val;
+	}
+
+	rc = of_property_read_u32(np, "bosch,place", &temp_val);
+	if (rc && (rc != -EINVAL)) {
+		dev_err(dev, "Unable to read sensor place paramater\n");
+		return rc;
+	}
+	if (temp_val > 7 || temp_val < 0) {
+		dev_err(dev, "Invalid place parameter, use default value 0\n");
+		pdata->place = 0;
+	} else {
+		pdata->place = temp_val;
+	}
+
+	pdata->use_int = of_property_read_bool(np, "bosch,use-interrupt");
+
+	pdata->gpio_int1 = of_get_named_gpio_flags(dev->of_node,
+				"bosch,gpio-int1", 0, NULL);
+
+	pdata->gpio_int2 = of_get_named_gpio_flags(dev->of_node,
+				"bosch,gpio-int2", 0, NULL);
+	return 0;
+}
+#else
+static int bma2x2_parse_dt(struct device *dev,
+			struct bma2x2_platform_data *pdata)
+{
+	return -EINVAL;
+}
+#endif
+
 static int bma2x2_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -6577,10 +6709,7 @@ static int bma2x2_probe(struct i2c_client *client,
 	struct bma2x2_data *data;
 	struct input_dev *dev;
 	struct bst_dev  *dev_acc;
-
-#if defined(BMA2X2_ENABLE_INT1) || defined(BMA2X2_ENABLE_INT2)
-	struct bosch_sensor_specific *pdata;
-#endif
+	struct bma2x2_platform_data *pdata;
 
 	struct input_dev *dev_interrupt;
 
@@ -6594,6 +6723,46 @@ static int bma2x2_probe(struct i2c_client *client,
 		err = -ENOMEM;
 		goto exit;
 	}
+	if (client->dev.of_node) {
+		pdata = devm_kzalloc(&client->dev,
+			sizeof(*pdata), GFP_KERNEL);
+		if (!pdata) {
+			dev_err(&client->dev, "Failed to allcated memory\n");
+			err = -ENOMEM;
+			goto kfree_exit;
+		}
+		err = bma2x2_parse_dt(&client->dev, pdata);
+		if (err) {
+			dev_err(&client->dev, "Failed to parse device tree\n");
+			err = -EINVAL;
+			goto pdata_free_exit;
+		}
+	} else {
+		pdata = client->dev.platform_data;
+		dev_err(&client->dev, "use  platform data\n");
+	}
+
+	if (!pdata) {
+		dev_err(&client->dev, "Cannot get device platform data\n");
+		err = -EINVAL;
+		goto kfree_exit;
+	}
+	data->pdata = pdata;
+	i2c_set_clientdata(client, data);
+	data->bma2x2_client = client;
+
+	err = bma2x2_power_init(data);
+	if (err) {
+		dev_err(&client->dev, "Failed to get sensor regulators\n");
+		err = -EINVAL;
+		goto free_i2c_clientdata_exit;
+	}
+	err = bma2x2_power_ctl(data, true);
+	if (err) {
+		dev_err(&client->dev, "Failed to enable sensor power\n");
+		err = -EINVAL;
+		goto deinit_power_exit;
+	}
 
 	/* do soft reset */
 	RESET_DELAY();
@@ -6601,17 +6770,15 @@ static int bma2x2_probe(struct i2c_client *client,
 		dev_err(&client->dev,
 			"i2c bus write error, pls check HW connection\n");
 		err = -EINVAL;
-		goto kfree_exit;
+		goto disable_power_exit;
 	}
 	RESET_DELAY();
 	/* read and check chip id */
 	if (bma2x2_check_chip_id(client, data) < 0) {
 		err = -EINVAL;
-		goto kfree_exit;
+		goto disable_power_exit;
 	}
 
-	i2c_set_clientdata(client, data);
-	data->bma2x2_client = client;
 	mutex_init(&data->value_mutex);
 	mutex_init(&data->mode_mutex);
 	mutex_init(&data->enable_mutex);
@@ -6626,10 +6793,6 @@ static int bma2x2_probe(struct i2c_client *client,
             goto kfree_exit;
         }
     }
-
-	if (client->dev.of_node){
-		bma2x2_parse_dt(&client->dev, data);
-	}
 
 #if defined(BMA2X2_ENABLE_INT1) || defined(BMA2X2_ENABLE_INT2)
 
@@ -6687,7 +6850,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	bma2x2_set_Int_Enable(client, 4, 1);
 #endif
 
-	client->irq = gpio_to_irq(data->int_pin);  //CONN-EC-SensorPorting-01+
 	data->IRQ = client->irq;
 	err = request_irq(data->IRQ, bma2x2_irq_handler, IRQF_TRIGGER_RISING,
 			"bma2x2", data);
@@ -6696,8 +6858,6 @@ static int bma2x2_probe(struct i2c_client *client,
 #endif
 	if (err)
 		dev_err(&client->dev,  "could not request irq\n");
-
-	disable_irq(data->IRQ);   //CONN-EC-SensorPorting-01+
 
 	INIT_WORK(&data->irq_work, bma2x2_irq_work_func);
 #endif
@@ -6841,19 +7001,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	if (err < 0)
 		goto bst_free_exit;
 
-	if (NULL != client->dev.platform_data) {
-		data->bst_pd = kzalloc(sizeof(*data->bst_pd),
-				GFP_KERNEL);
-
-		if (NULL != data->bst_pd) {
-			memcpy(data->bst_pd, client->dev.platform_data,
-					sizeof(*data->bst_pd));
-			dev_notice(&client->dev,
-				"%s sensor driver set place: p%d",
-				data->bst_pd->name, data->bst_pd->place);
-		}
-	}
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	data->early_suspend.suspend = bma2x2_early_suspend;
@@ -6911,11 +7058,17 @@ err_register_input_device_interrupt:
 err_register_input_device:
 	input_free_device(dev);
 
+disable_power_exit:
+	bma2x2_power_ctl(data, false);
+deinit_power_exit:
+	bma2x2_power_deinit(data);
+free_i2c_clientdata_exit:
+	i2c_set_clientdata(client, NULL);
+pdata_free_exit:
+	if (pdata && (client->dev.of_node))
+		devm_kfree(&client->dev, pdata);
+	data->pdata = NULL;
 kfree_exit:
-	if ((NULL != data) && (NULL != data->bst_pd)) {
-		kfree(data->bst_pd);
-		data->bst_pd = NULL;
-	}
 	kfree(data);
 exit:
 	return err;
@@ -6964,11 +7117,6 @@ static int bma2x2_remove(struct i2c_client *client)
 #endif
 	sysfs_remove_group(&data->input->dev.kobj, &bma2x2_attribute_group);
 	input_unregister_device(data->input);
-
-	if ((NULL != data) && (NULL != data->bst_pd)) {
-		kfree(data->bst_pd);
-		data->bst_pd = NULL;
-	}
 
 	kfree(data);
 
@@ -7032,10 +7180,16 @@ static const struct i2c_device_id bma2x2_id[] = {
 
 MODULE_DEVICE_TABLE(i2c, bma2x2_id);
 
+static const struct of_device_id bma2x2_of_match[] = {
+	{ .compatible = "bosch,bma2x2", },
+	{ },
+};
+
 static struct i2c_driver bma2x2_driver = {
 	.driver = {
 		.owner  = THIS_MODULE,
 		.name   = SENSOR_NAME,
+		.of_match_table = bma2x2_of_match,
 	},
 	.suspend    = bma2x2_suspend,
 	.resume     = bma2x2_resume,

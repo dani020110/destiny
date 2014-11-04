@@ -579,6 +579,8 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 	u32 cfg;
 	int ret = 0;
 	uint16_t bit_width = 16;
+	bool use_default_chmap = true;
+	char *chmap = NULL;
 
 	switch (prtd->codec) {
 	case FORMAT_LINEAR_PCM:
@@ -589,7 +591,9 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 							prtd->audio_client,
 							prtd->sample_rate,
 							prtd->num_channels,
-							bit_width, stream_id);
+							bit_width, stream_id,
+							use_default_chmap,
+							chmap);
 		if (ret < 0)
 			pr_err("%s: CMD Format block failed\n", __func__);
 

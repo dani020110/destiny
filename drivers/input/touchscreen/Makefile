@@ -86,3 +86,4 @@ obj-$(CONFIG_INPUT_MT_WRAPPER)		+= input_mt_wrapper.o
 obj-$(CONFIG_TOUCHSCREEN_IT7260_I2C)    += it7258_ts_i2c.o
 obj-y += cypress-gen4/
 obj-y += cypress-gen5/
+obj-y += touchboost.o

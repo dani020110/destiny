@@ -1707,7 +1707,7 @@ static ssize_t cyttsp4_forced_upgrade_store(struct device *dev,
 	return size;
 }
 
-static DEVICE_ATTR(forced_upgrade, S_IRUSR | S_IWUSR,
+static DEVICE_ATTR(forced_upgrade, S_IWUSR,
 	NULL, cyttsp4_forced_upgrade_store);
 #endif
 
@@ -1720,7 +1720,7 @@ static ssize_t cyttsp4_manual_upgrade_store(struct device *dev,
 	return size;
 }
 
-static DEVICE_ATTR(manual_upgrade, S_IRUSR | S_IWUSR,
+static DEVICE_ATTR(manual_upgrade, S_IWUSR,
 	NULL, cyttsp4_manual_upgrade_store);
 
 static ssize_t upgrade_now_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
@@ -1730,7 +1730,7 @@ static ssize_t upgrade_now_store(struct device *dev, struct device_attribute *at
 	return size;
 }
 
-static DEVICE_ATTR( upgrade_now, S_IRUSR | S_IWUSR, NULL, upgrade_now_store );
+static DEVICE_ATTR( upgrade_now, S_IWUSR, NULL, upgrade_now_store );
 
 static ssize_t upgrade_step_show(struct device *dev, struct device_attribute *attr, char *buf )
 {
@@ -1740,7 +1740,7 @@ static ssize_t upgrade_step_show(struct device *dev, struct device_attribute *at
 	return sizeof( int );
 }
 
-static DEVICE_ATTR( upgrade_step, S_IRUSR | S_IWUSR, upgrade_step_show, NULL );
+static DEVICE_ATTR( upgrade_step, S_IRUSR, upgrade_step_show, NULL );
 #endif
 
 static int cyttsp4_loader_probe(struct cyttsp4_device *ttsp)

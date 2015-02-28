@@ -1238,7 +1238,7 @@ unsigned int __read_mostly sched_init_task_load_pelt;
 unsigned int __read_mostly sched_init_task_load_windows;
 unsigned int __read_mostly sysctl_sched_init_task_load_pct = 15;
 
-static inline unsigned int task_load(struct task_struct *p)
+unsigned int task_load(struct task_struct *p)
 {
 	if (sched_use_pelt)
 		return p->se.avg.runnable_avg_sum_scaled;

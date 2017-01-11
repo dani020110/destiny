@@ -7,7 +7,7 @@ PINK='\033[1;35m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 
-export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/sabermod-aarch64-4.9-3-kernel/bin/aarch64-
+export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/linaro-4.9-aarch64-kernel/bin/aarch64-linux-gnu-
 
 echo -e "${WHITE}Cleaning up"
 make mrproper

@@ -2285,23 +2285,6 @@ static int msm8x16_setup_hs_jack(struct platform_device *pdev,
 	return 0;
 }
 
-static void msm8x16_dt_parse_cap_info(struct platform_device *pdev,
-			struct msm8916_asoc_mach_data *pdata)
-{
-	const char *ext1_cap = "qcom,msm-micbias1-ext-cap";
-	const char *ext2_cap = "qcom,msm-micbias2-ext-cap";
-
-	pdata->micbias1_cap_mode =
-		(of_property_read_bool(pdev->dev.of_node, ext1_cap) ?
-		MICBIAS_EXT_BYP_CAP : MICBIAS_NO_EXT_BYP_CAP);
-
-	pdata->micbias2_cap_mode =
-		(of_property_read_bool(pdev->dev.of_node, ext2_cap) ?
-		MICBIAS_EXT_BYP_CAP : MICBIAS_NO_EXT_BYP_CAP);
-
-	return;
-}
-
 int get_cdc_gpio_lines(struct pinctrl *pinctrl, int ext_pa)
 {
 	pr_debug("%s\n", __func__);
@@ -2671,7 +2654,6 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	pdata->lb_mode = false;
 
 	msm8x16_setup_hs_jack(pdev, pdata);
-	msm8x16_dt_parse_cap_info(pdev, pdata);
 
        /* MM-UW-modify for DP-00+{ */ 
        if((phase_id >= PHASE_DP) || (phase_id == PHASE_EVM)){

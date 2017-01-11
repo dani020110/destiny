@@ -27,7 +27,7 @@ echo ""
 
 echo -e "${YELLOW}Making dtb.img"
 echo ""
-../dtbToolCM -2 -o ../dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/
+../build_tools/dtbToolCM -2 -o ../dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/
 echo ""
 
 echo -e "${LGREEN}Making the boot image"

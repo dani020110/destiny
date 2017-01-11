@@ -7,7 +7,7 @@ PINK='\033[1;35m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 
-export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/linaro-4.9-aarch64-kernel/bin/aarch64-linux-gnu-
+export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/ubertc_kernel/aarch64-linux-android-4.9-kernel/bin/aarch64-linux-android-
 
 echo -e "${WHITE}Cleaning up"
 make mrproper
@@ -27,10 +27,10 @@ echo ""
 
 echo -e "${YELLOW}Making dtb.img"
 echo ""
-../foy_build_tools/dtbToolCM -2 -o ../dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/
+../dtbToolCM -2 -o ../dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/
 echo ""
 
 echo -e "${LGREEN}Making the boot image"
-../foy_build_tools/mkbootimg --kernel arch/arm64/boot/Image --ramdisk ../ramdisk-e2306.cpio.gz --dt ../dtb.img --base 0x81dfff00 --ramdisk_offset 0x82000000 --tags_offset 0x81E00000 --pagesize 2048 --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" -o ../foykernel_${TIMESTAMP}.img
+../build_tools/mkbootimg --kernel arch/arm64/boot/Image --ramdisk ../ramdisk-e2306.cpio.gz --dt ../dtb.img --base 0x81dfff00 --ramdisk_offset 0x82000000 --tags_offset 0x81E00000 --pagesize 2048 --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" -o ../foykernel_$TIMESTAMP.img
 
 echo -e "${GREEN}The kernel has been built successfully"

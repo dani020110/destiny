@@ -41,16 +41,8 @@ echo ""
 make ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE -j$(grep -c ^processor /proc/cpuinfo)
 echo ""
 
-echo -e "${GREEN}Making the boot image for all the variants${NCOLOR}"
-../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2306-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3_e2306.img
-
-../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2303-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3_e2303.img
-
-../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2333-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3_e2333.img
-
-../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2312-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3_e2312.img
-
-../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2353-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3_e2353.img
+echo -e "${GREEN}Making the boot image${NCOLOR}"
+../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk ../build_tools/ramdisks/e2306-ramdisk.cpio.gz --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o destiny-r3.img
 
 BUILD_END=$(date +"%s")
 DIFF=$(($BUILD_END - $BUILD_START))

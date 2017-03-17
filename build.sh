@@ -22,7 +22,7 @@ YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 BOOTIMAGE='../build_tools/destiny-r3.img'
 WLANM='../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko'
-RAMDISK='./build_tools/ramdisks/destiny-ramdisk.cpio.gz'
+RAMDISK='../build_tools/ramdisks/destiny-ramdisk.cpio.gz'
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 

@@ -12,6 +12,7 @@
 # GNU General Public License for more details.
 #
 
+# Colors
 BCYAN='\033[1;36m'
 LGREEN='\033[1;32m'
 GREEN='\033[0;32m'
@@ -20,9 +21,14 @@ PINK='\033[1;35m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
+
+# Kernel-related files
 BOOTIMAGE='../build_tools/destiny-r3.img'
 WLANM='../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko'
 RAMDISK='../build_tools/ramdisks/destiny-ramdisk.cpio.gz'
+
+# Release
+export REL="3a"
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 
@@ -33,7 +39,7 @@ echo -e "${WHITE}Cleaning up${NCOLOR}"
 make mrproper
 rm *.img
 rm $BOOTIMAGE
-rm $WLANM
+#rm $WLANM
 #To do: find a workaround for the .dtb's not being deleted
 rm $(find -name '*.dtb')
 echo ""
@@ -51,7 +57,6 @@ echo ""
 make ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE -j$(grep -c ^processor /proc/cpuinfo)
 echo ""
 
-#Hmm...
 echo -e "${YELLOW}Making dtb.img${NCOLOR}"
 echo ""
 ../build_tools/dtbToolCM -2 -o dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/
@@ -67,5 +72,5 @@ BUILD_END=$(date +"%s")
 DIFF=$(($BUILD_END - $BUILD_START))
 echo -e "${LGREEN}Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds!${NCOLOR}"
 
-#Copy wlan module
-cp drivers/staging/prima/wlan.ko $WLANM
+# Copy wlan module
+# cp drivers/staging/prima/wlan.ko $WLANM

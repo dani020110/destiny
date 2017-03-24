@@ -22,18 +22,17 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 
-# Kernel-related files
-BOOTIMAGE='../build_tools/destiny-r3.img'
-WLANM='../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko'
-RAMDISK='../build_tools/ramdisks/destiny-ramdisk.cpio.gz'
-
 # Release
-export REL="3a"
+export REL="3b"
+
+# Kernel-related files
+BOOTIMAGE=../build_tools/destiny-$REL.img
+WLANM=../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko
+RAMDISK=../build_tools/ramdisks/destiny-ramdisk.cpio.gz
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 
 export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/ubertc_kernel/aarch64-linux-android-4.9-kernel/bin/aarch64-linux-android-
-#export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/linaro-4.9_aarch64-kernel/bin/aarch64-linux-gnu-
 
 echo -e "${WHITE}Cleaning up${NCOLOR}"
 make mrproper
@@ -72,5 +71,5 @@ BUILD_END=$(date +"%s")
 DIFF=$(($BUILD_END - $BUILD_START))
 echo -e "${LGREEN}Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds!${NCOLOR}"
 
-# Copy wlan module
-# cp drivers/staging/prima/wlan.ko $WLANM
+# Copy wlan module, it is necessary only when there are changes to the linux version, or changes to the module itself
+cp drivers/staging/prima/wlan.ko $WLANM

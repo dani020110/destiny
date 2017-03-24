@@ -332,7 +332,7 @@ cyttsp5_get_mt_touches_pr_tch:
 					finger_state->down_state	= false;
 
 				if( down != finger_state->down_state )
-					dev_dbg(dev, "ETUCH : <%d>(%s)[%d:%d:%d]|[%d,%d]\n", finger, finger_state->down_state ? "down" : "up", tch->abs[CY_TCH_X], tch->abs[CY_TCH_Y], tch->abs[CY_TCH_P], tch->abs[CY_TCH_OR], finger_state->pointer_count );
+					pr_debug(dev, "ETUCH : <%d>(%s)[%d:%d:%d]|[%d,%d]\n", finger, finger_state->down_state ? "down" : "up", tch->abs[CY_TCH_X], tch->abs[CY_TCH_Y], tch->abs[CY_TCH_P], tch->abs[CY_TCH_OR], finger_state->pointer_count );
 			}
 		}
 

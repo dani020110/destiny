@@ -67,13 +67,6 @@ if FIH_CONFIG_GROUP
                 Enable suspend and resume log support
 	# CORE-PK-RPMStatsLog-00+]
 
-        config FIH_DUMP_WAKELOCK
-            bool "FIH DUMP WAKELOCK"
-            depends on FIH_CONFIG_GROUP
-            default y
-            help
-                Enable to dump wakelock if it active.
-
         config FIH_HR_MSLEEP
             bool "High Resolution Sleep"
             default y

@@ -23,10 +23,10 @@ YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 
 # Release
-export REL="3b"
+export REL="4"
 
 # Kernel-related files
-BOOTIMAGE=../build_tools/destiny-$REL.img
+BOOTIMAGE=../build_tools/destiny-r$REL.img
 WLANM=../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko
 RAMDISK=../build_tools/ramdisks/destiny-ramdisk.cpio.gz
 

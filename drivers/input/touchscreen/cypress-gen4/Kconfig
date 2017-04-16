@@ -34,7 +34,7 @@ config TOUCHSCREEN_CYPRESS_CYTTSP4_DEVICETREE_SUPPORT
 config TOUCHSCREEN_CYPRESS_CYTTSP4_DEBUG
 	bool "Enable debug output"
 	depends on TOUCHSCREEN_CYPRESS_CYTTSP4
-	default y
+	default n
 	help
 	  Enable Debug output for Cypress TrueTouch(tm)
 	  Standard Product Generation4 drivers set.
@@ -195,7 +195,7 @@ config TOUCHSCREEN_CYPRESS_CYTTSP4_MANUAL_TTCONFIG_UPGRADE
 config TOUCHSCREEN_CYPRESS_CYTTSP4_DEBUG_MODULE
 	tristate "Cypress TrueTouch Gen4 MultiTouch Debug Module"
 	depends on TOUCHSCREEN_CYPRESS_CYTTSP4
-	default y
+	default n
 	help
 	  Cypress TrueTouch(tm) Standard Product Generation4
 	  Debug module.

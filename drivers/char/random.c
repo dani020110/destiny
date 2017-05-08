@@ -298,7 +298,7 @@ static int random_read_wakeup_thresh = 64;
  * should wake up processes which are selecting or polling on write
  * access to /dev/random.
  */
-static int random_write_wakeup_thresh = 128;
+static int random_write_wakeup_thresh = 64;
 
 /*
  * When the input pool goes over trickle_thresh, start dropping most

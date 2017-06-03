@@ -485,8 +485,7 @@ static struct pll_clk a53ss_cci_pll = {
 static struct pll_freq_tbl apcs_c0_pll_freq[] = {
 	F_APCS_PLL( 998400000,  52, 0x0, 0x1, 0x0, 0x0, 0x0),
 	F_APCS_PLL(1113600000,  58, 0x0, 0x1, 0x0, 0x0, 0x0),
-	F_APCS_PLL(1209600000,  58, 0x0, 0x1, 0x0, 0x0, 0x0),
-	F_APCS_PLL(1229600000,  60, 0x0, 0x1, 0x0, 0x0, 0x0),
+	F_APCS_PLL(1209600000,  63, 0x0, 0x1, 0x0, 0x0, 0x0),
 };
 
 static struct pll_clk a53ss_c0_pll = {
@@ -828,24 +827,18 @@ static struct rcg_clk vfe0_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_gcc_oxili_gfx3d_clk[] = {
-	F(  19200000,	   gpll3_out_main,   1,	  0,	0),
+	F(  19200000,	      gcc_xo,   1,	  0,	0),
 	F(  50000000,	   gpll0_out_main,  16,	  0,	0),
 	F(  80000000,      gpll0_out_main,  10,	  0,	0),
 	F( 100000000,      gpll0_out_main,   8,	  0,	0),
-	F( 178000000,      gpll3_out_main,   5,	  0,	0),
-	F( 192000000,      gpll0_out_main,   4,	  0,	0),
+	F( 160000000,      gpll0_out_main,   5,	  0,	0),
 	F( 200000000,      gpll0_out_main,   4,	  0,	0),
-	F( 250000000,      gpll0_out_main,   5,	  0,	0),
+	F( 220000000,      gpll3_out_main,   5,	  0,	0),
 	F( 266670000,      gpll0_out_main,   3,	  0,	0),
-	F( 285000000,      gpll3_out_main,   3,   0,    0),
 	F( 310000000,	gpll2_gfx3d,	3,	  0,	0),
-	F( 435000000,      gpll3_out_main,   2,	  0,	0),
+	F( 400000000,      gpll0_out_main,   2,	  0,	0),
 	F( 465000000,      gpll2_gfx3d,   2,    0,    0),
-	F( 525000000,	   gpll2_gfx3d,   2,	  0,	0),
 	F( 550000000,      gpll3_out_main,   2,    0,    0),
-	F( 600000000,      gpll3_out_main,   2,   0,    0),
-	F( 650000000,      gpll2_gfx3d,   2,    0,    0),
-	F( 700000000, 	   gpll3_out_main,   2,    0,    0),
 	F_END
 };
 
@@ -858,8 +851,8 @@ static struct rcg_clk gfx3d_clk_src = {
 	.c = {
 		.dbg_name = "gfx3d_clk_src",
 		.ops = &clk_ops_rcg,
-		VDD_DIG_FMAX_MAP4(LOW, 178000000, NOMINAL, 435000000, NOMINAL_PLUS, 650000000, HIGH,
-			700000000),
+		VDD_DIG_FMAX_MAP4(LOW, 220000000, NOMINAL, 400000000, NOMINAL_PLUS, 465000000, HIGH,
+			550000000),
 		CLK_INIT(gfx3d_clk_src.c),
 	},
 };

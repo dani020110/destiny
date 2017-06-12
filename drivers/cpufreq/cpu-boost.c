@@ -53,7 +53,8 @@ module_param(sched_boost_on_input, bool, 0644);
 
 static bool sched_boost_active;
 
-static bool hotplug_boost;
+// Use HotPlug Boost as a "Global Permission Toggle" to Disable Core 0 on big.LITTLE SoCs.
+bool hotplug_boost;
 module_param(hotplug_boost, bool, 0644);
 
 static bool wakeup_boost;

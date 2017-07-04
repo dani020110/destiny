@@ -28,7 +28,7 @@ export REL="4"
 # Kernel-related files
 BOOTIMAGE=../build_tools/destiny-r$REL.img
 WLANM=../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko
-RAMDISK=../build_tools/ramdisks/destiny-ramdisk.cpio.gz
+RAMDISK=../build_tools/ramdisk.cpio.gz
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 
@@ -59,6 +59,17 @@ echo -e "${YELLOW}Making dtb.img...${NCOLOR}"
 echo ""
 ../build_tools/dtbToolCM -2 -o dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/ && echo -e "${YELLOW}Done!${NCOLOR}"
 echo ""
+
+echo -e "${BBLUE}Would you like to pack the ramdisk? [y/ignore]${NCOLOR}"
+read ans
+if [ $ans = y -o $ans = Y -o $ans = yes -o $ans = Yes -o $ans = YES ]
+then
+cd ../build_tools/
+rm ramdisk.cpio.gz
+./mkbootfs ramdisk | gzip -n -f > ramdisk.cpio.gz && echo -e "${YELLOW}Done!${NCOLOR}"
+echo ""
+cd ../kernel
+fi
 
 echo -e "${GREEN}Making the boot image...${NCOLOR}"
 #This way could boot in some variants

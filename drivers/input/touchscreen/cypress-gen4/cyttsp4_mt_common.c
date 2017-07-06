@@ -114,7 +114,7 @@ static void cyttsp4_get_mt_touches(struct cyttsp4_mt_data *md, int num_cur_rec)
 	/* PERI-FG-TOUCH_WORKAROUND-00+[ */
 	if (!mdss_display_power_state())
 	{
-		printk( "ETUCH : Skip touch events\n" );
+		pr_debug( "ETUCH : Skip touch events\n" );
 		return;
 	}
 	/* PERI-FG-TOUCH_WORKAROUND-00+] */

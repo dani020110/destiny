@@ -23,7 +23,7 @@ YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 
 # Release
-export REL="4"
+export REL="5"
 
 # Kernel-related files
 BOOTIMAGE=../build_tools/destiny-r$REL.img
@@ -38,6 +38,7 @@ echo -e "${WHITE}Cleaning up${NCOLOR}"
 make mrproper
 rm dtb.img
 rm $BOOTIMAGE
+rm ../build_tools/boot.img
 #To do: find a workaround for the .dtb's not being deleted
 rm $(find -name '*.dtb')
 echo ""
@@ -86,8 +87,8 @@ read ans
 if [ $ans = y -o $ans = Y -o $ans = yes -o $ans = Yes -o $ans = YES ]
 then
 cp drivers/staging/prima/wlan.ko $WLANM
-cd ../build_tools 
-rm zipme/*.img 
-cp destiny-r$REL.img zipme/boot.img 
+cd ../build_tools
+rm zipme/*.img
+cp destiny-r$REL.img zipme/boot.img
 sh packzip.sh
 fi

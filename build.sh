@@ -23,12 +23,13 @@ YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 
 # Release
-export REL="5"
+export REL="6"
 
 # Kernel-related files
-BOOTIMAGE=../build_tools/destiny-r$REL.img
-WLANM=../build_tools/zipme/system/lib/modules/pronto/pronto_wlan.ko
-RAMDISK=../build_tools/ramdisk.cpio.gz
+BTOOLS=../build_tools
+BOOTIMAGE=$BTOOLS/destiny-r$REL.img
+WLANM=$BTOOLS/zipme/system/lib/modules/pronto/pronto_wlan.ko
+RAMDISK=$BTOOLS/ramdisk.cpio.gz
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 
@@ -38,7 +39,7 @@ echo -e "${WHITE}Cleaning up${NCOLOR}"
 make mrproper
 rm dtb.img
 rm $BOOTIMAGE
-rm ../build_tools/boot.img
+rm $BTOOLS/boot.img
 #To do: find a workaround for the .dtb's not being deleted
 rm $(find -name '*.dtb')
 echo ""
@@ -58,14 +59,14 @@ echo ""
 
 echo -e "${YELLOW}Making dtb.img...${NCOLOR}"
 echo ""
-../build_tools/dtbToolCM -2 -o dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/ && echo -e "${YELLOW}Done!${NCOLOR}"
+$BTOOLS/dtbToolCM -2 -o dtb.img -s 2048 -p scripts/dtc/ arch/arm/boot/dts/ && echo -e "${YELLOW}Done!${NCOLOR}"
 echo ""
 
 echo -e "${BBLUE}Would you like to pack the ramdisk? [y/ignore]${NCOLOR}"
 read ans
 if [ $ans = y -o $ans = Y -o $ans = yes -o $ans = Yes -o $ans = YES ]
 then
-cd ../build_tools/
+cd $BTOOLS
 rm ramdisk.cpio.gz
 ./mkbootfs ramdisk | gzip -n -f > ramdisk.cpio.gz && echo -e "${YELLOW}Done!${NCOLOR}"
 echo ""
@@ -74,9 +75,9 @@ fi
 
 echo -e "${GREEN}Making the boot image...${NCOLOR}"
 #This way could boot in some variants
-#../build_tools/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk $RAMDISK --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o $BOOTIMAGE
+#$BTOOLS/bootimg mkimg --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" --base 0x81dfff00 --kernel arch/arm64/boot/Image.gz-dtb --ramdisk $RAMDISK --ramdisk_offset 0x82000000 --pagesize 2048 --tags_offset 0x81E00000 -o $BOOTIMAGE
 
-../build_tools/mkbootimg --kernel arch/arm64/boot/Image --ramdisk $RAMDISK --dt dtb.img --base 0x81dfff00 --ramdisk_offset 0x82000000 --tags_offset 0x81E00000 --pagesize 2048 --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" -o $BOOTIMAGE && echo -e "${GREEN}Done!${NCOLOR}"
+$BTOOLS/mkbootimg --kernel arch/arm64/boot/Image --ramdisk $RAMDISK --dt dtb.img --base 0x81dfff00 --ramdisk_offset 0x82000000 --tags_offset 0x81E00000 --pagesize 2048 --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom msm_rtb.filter=0x237 ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1 earlyprintk" -o $BOOTIMAGE && echo -e "${GREEN}Done!${NCOLOR}"
 
 BUILD_END=$(date +"%s")
 DIFF=$(($BUILD_END - $BUILD_START))
@@ -87,7 +88,7 @@ read ans
 if [ $ans = y -o $ans = Y -o $ans = yes -o $ans = Yes -o $ans = YES ]
 then
 cp drivers/staging/prima/wlan.ko $WLANM
-cd ../build_tools
+cd $BTOOLS
 rm zipme/*.img
 cp destiny-r$REL.img zipme/boot.img
 sh packzip.sh

@@ -1161,7 +1161,7 @@ static unsigned long maybe_relocated(unsigned long crc,
 static int check_version(Elf_Shdr *sechdrs,
 			 unsigned int versindex,
 			 const char *symname,
-			 struct module *mod, 
+			 struct module *mod,
 			 const unsigned long *crc,
 			 const struct module *crc_owner)
 {
@@ -1172,6 +1172,12 @@ static int check_version(Elf_Shdr *sechdrs,
 		return 1;
 
 	if(!strncmp("texfat", mod->name, 6))
+		return 0;
+
+	if(!strncmp("evbug", mod->name, 5))
+		return 0;
+
+	if(!strncmp("core_ctl", mod->name, 8))
 		return 1;
 
 	if(!strncmp("ecryptfs", mod->name, 8))

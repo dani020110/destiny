@@ -23,7 +23,7 @@ YELLOW='\033[1;33m'
 NCOLOR='\033[0m'
 
 # Release
-export REL="6"
+export REL="7"
 
 # Kernel-related files
 BTOOLS=../build_tools
@@ -33,7 +33,7 @@ RAMDISK=$BTOOLS/ramdisk.cpio.gz
 
 clear && echo -e "${BCYAN}Hi $USER, you are building the destiny kernel!${NCOLOR}"
 
-export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/ubertc_kernel/aarch64-linux-android-4.9-kernel/bin/aarch64-linux-android-
+export CROSS_COMPILE=/media/DATOS/desarrollo/kernel/toolchain/aarch64-linux-android-4.9-kernel-linaro/bin/aarch64-linux-android-
 
 echo -e "${WHITE}Cleaning up${NCOLOR}"
 make mrproper

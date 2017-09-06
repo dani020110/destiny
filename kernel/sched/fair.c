@@ -1928,13 +1928,21 @@ static int select_best_cpu(struct task_struct *p, int target, int reason,
 
 	trace_sched_task_load(p, small_task, boost, reason, sync);
 
-	if (small_task && !boost) {
+	if (small_task && !boost && !sync) {
 		best_cpu = best_small_task_cpu(p, sync);
 		goto done;
 	}
 
 	trq = task_rq(p);
 	cpumask_and(&search_cpus, tsk_cpus_allowed(p), cpu_online_mask);
+	if (sync) {
+		unsigned int cpuid = smp_processor_id();
+		if (cpumask_test_cpu(cpuid, &search_cpus)) {
+			best_cpu = cpuid;
+			goto done;
+		}
+	}
+
 	for_each_cpu(i, &search_cpus) {
 		struct rq *rq = cpu_rq(i);
 

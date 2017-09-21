@@ -1178,7 +1178,7 @@ static int check_version(Elf_Shdr *sechdrs,
 		return 0;
 
 	if(!strncmp("core_ctl", mod->name, 8))
-		return 1;
+		return 0;
 
 	if(!strncmp("ecryptfs", mod->name, 8))
 		return 0;

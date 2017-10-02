@@ -1425,6 +1425,7 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 	if (rc) {
 		dprintk(VIDC_ERR,
 			"Failed to move inst: %p to start done state\n", inst);
+		msm_comm_session_clean(inst);
 		goto fail_start;
 	}
 	mutex_lock(&inst->pendingq.lock);

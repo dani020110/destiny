@@ -84,13 +84,6 @@ if FIH_CONFIG_GROUP
 	    bool "Android RAM buffer console"
 	    default y
 
-        config FEATURE_FIH_SW3_LAST_ALOG
-            bool "RAM console for last alog"
-            depends on FIH_CONFIG_GROUP
-            default y
-            help
-                Enable RAM console for last alog
-
         config FIH_REMOVE_SERIAL_DYNAMICALLY
             bool "turn off serial port dynamically"
             default n

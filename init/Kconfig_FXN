@@ -1,0 +1,5 @@
+config FIH_DUMP_WAKELOCK
+	bool "FIH DUMP WAKELOCK"
+	default y
+	help
+	  Enable to dump wakelock if it active.

@@ -49,20 +49,17 @@ if FIH_CONFIG_GROUP
 	# CORE-PK-RPMStatsLog-00+[
         config FIH_FEATURE_RPM_STATS_LOG
             bool "FIH RPM STATS LOG"
-            default y
             help
              Enable to show RPM Stats log after device resume from suspend.
 
         config FIH_FEATURE_RPM_MASTER_STATS_LOG
             bool "FIH RPM MASTER STATS LOG"
             depends on FIH_FEATURE_RPM_STATS_LOG
-            default y
             help
              Enable to show RPM Master Stats log after device resume from suspend.
 
         config FIH_SUSPEND_RESUME_LOG
             bool "FIH LOG about SUSPEND/RESUME"
-            default y
             help
                 Enable suspend and resume log support
 	# CORE-PK-RPMStatsLog-00+]
@@ -129,20 +126,17 @@ if FIH_CONFIG_GROUP
 	# CORE-PK-RPMStatsLog-00+[
         config FIH_FEATURE_RPM_STATS_LOG
             bool "FIH RPM STATS LOG"
-            default y
             help
              Enable to show RPM Stats log after device resume from suspend.
 
         config FIH_FEATURE_RPM_MASTER_STATS_LOG
             bool "FIH RPM MASTER STATS LOG"
             depends on FIH_FEATURE_RPM_STATS_LOG
-            default y
             help
              Enable to show RPM Master Stats log after device resume from suspend.
 
         config FIH_SUSPEND_RESUME_LOG
             bool "FIH LOG about SUSPEND/RESUME"
-            default y
             help
                 Enable suspend and resume log support
 	# CORE-PK-RPMStatsLog-00+]

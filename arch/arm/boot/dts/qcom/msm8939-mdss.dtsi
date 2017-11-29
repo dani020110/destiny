@@ -249,6 +249,8 @@
 		qcom,dsi-clk-ln-recovery;
 		qcom,timing-db-mode;
 
+		status = "disabled";
+
 		qcom,core-supply-entries {
 			#address-cells = <1>;
 			#size-cells = <0>;

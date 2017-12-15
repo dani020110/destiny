@@ -125,6 +125,7 @@ config PCI_MSM
 	depends on ARCH_MSM && PCI
 	select PCI_DOMAINS
 	select PCI_MSI
+	select ARCH_SUPPORTS_MSI
 	help
 	  Enables the PCIe functionality by configures PCIe core on
 	  MSM chipset and by enabling the ARM PCI framework extension.

@@ -47,8 +47,8 @@
 		_IOR(CAPELLA_CM3602_IOCTL_MAGIC, 1, int *)
 #define CAPELLA_CM3602_IOCTL_ENABLE \
 		_IOW(CAPELLA_CM3602_IOCTL_MAGIC, 2, int *)
-
-#define LS_PWR_ON			(1 << 0)
+#define CAPELLA_CM3602_IOCTL_GEN_P_EVENT \
+		_IOW(CAPELLA_CM3602_IOCTL_MAGIC, 3, int *)
 
 #define I2C_RETRY_COUNT 10
 
@@ -57,6 +57,10 @@
 #define CONTROL_INT_ISR_REPORT		0x00
 #define CONTROL_ALS			0x01
 #define CONTROL_PS			0x02
+
+#define PS_CLOSE 1
+#define PS_AWAY  (1<<1)
+#define PS_CLOSE_AND_AWAY PS_CLOSE+PS_AWAY
 
 static int record_init_fail = 0;
 static void sensor_irq_do_work(struct work_struct *work);
@@ -76,15 +80,12 @@ struct cm36686_info {
 	int intr_pin;
 	int als_enable;
 	int ps_enable;
-	int ps_irq_flag;
 
 	uint16_t adc_table[ 10 ];
 	uint16_t cali_table[10];
 	int irq;
 
 	int ls_calibrate;
-	
-	int (*power)(int, uint8_t); /* power to the chip */
 
 	uint32_t als_kadc;
 	uint32_t als_gadc;
@@ -96,12 +97,11 @@ struct cm36686_info {
 	uint8_t slave_addr;
 
 	uint16_t ps_close_thd_set;
-	uint16_t ps_away_thd_set;	
-	int current_level;
+	uint16_t ps_away_thd_set;
 	uint16_t current_adc;
 	unsigned current_lux;
 	unsigned IR_Ink;
-    uint8_t inte_cancel_set;
+    uint16_t inte_cancel_set;
 	uint16_t ps_conf1_val;
 	uint16_t ps_conf3_val;
 
@@ -109,24 +109,23 @@ struct cm36686_info {
 	uint16_t ls_thd_low_offset;
 
 	uint16_t ls_cmd;
-	uint8_t record_clear_int_fail;
-
 	unsigned vdd_power[ 3 ], i2c_power[ 3 ];
 };
 struct cm36686_info *lp_info;
 int fLevel=-1;
-static uint8_t ps_cancel_set;
 static struct mutex als_enable_mutex, als_disable_mutex, als_get_adc_mutex;
-static struct mutex ps_enable_mutex, ps_disable_mutex, ps_get_adc_mutex;
+static struct mutex ps_enable_mutex, ps_disable_mutex;
 static struct mutex CM36686_control_mutex;
 static int lightsensor_enable(struct cm36686_info *lpi);
 static int lightsensor_disable(struct cm36686_info *lpi);
 static int initial_cm36686(struct cm36686_info *lpi);
 static void psensor_initial_cmd(struct cm36686_info *lpi);
+static int psensor_report(struct cm36686_info *lpi, const int ps_status);
 
 int32_t als_kadc;
 
-static int control_and_report(struct cm36686_info *lpi, uint8_t mode, uint16_t param);
+static int isr_report(struct cm36686_info *lpi, uint16_t param);
+static int enable_sensor(struct cm36686_info *lpi, int sensor, const int enable);
 
 static int I2C_RxData(uint16_t slaveAddr, uint8_t cmd, uint8_t *rxData, int length)
 {
@@ -250,7 +249,6 @@ static int _cm36686_I2C_Write_Word(uint16_t SlaveAddress, uint8_t cmd, uint16_t 
 static int get_ls_adc_value(uint16_t *als_step, bool resume)
 {
 	struct cm36686_info *lpi = lp_info;
-	uint32_t tmpResult;
 	int ret = 0;
 
 	if (als_step == NULL)
@@ -264,17 +262,6 @@ static int get_ls_adc_value(uint16_t *als_step, bool resume)
 			__func__);
 		return -EIO;
 	}
-if( 0 )
-  if (!lpi->ls_calibrate ) {
-		tmpResult = (uint32_t)(*als_step) * lpi->als_gadc / lpi->als_kadc;
-		if (tmpResult > 0xFFFF)
-			*als_step = 0xFFFF;
-		else
-		  *als_step = tmpResult;  			
-	}
-
-	D("[LS][CM36686] %s: raw adc = 0x%X, ls_calibrate = %d\n",
-		__func__, *als_step, lpi->ls_calibrate);
 
 	return ret;
 }
@@ -315,33 +302,13 @@ static int get_ps_adc_value(uint16_t *data)
 	return ret;
 }
 
-static uint16_t mid_value(uint16_t value[], uint8_t size)
-{
-	int i = 0, j = 0;
-	uint16_t temp = 0;
-
-	if (size < 3)
-		return 0;
-
-	for (i = 0; i < (size - 1); i++)
-		for (j = (i + 1); j < size; j++)
-			if (value[i] > value[j]) {
-				temp = value[i];
-				value[i] = value[j];
-				value[j] = temp;
-			}
-	return value[((size - 1) / 2)];
-}
-
 static int get_stable_ps_adc_value(uint16_t *ps_adc)
 {
-	uint16_t value[3] = {0, 0, 0}, mid_val = 0;
+	uint16_t value = 0;
 	int ret = 0;
-	int i = 0;
 	int wait_count = 0;
 	struct cm36686_info *lpi = lp_info;
 
-//	for (i = 0; i < 3; i++) {
 		/*wait interrupt GPIO high*/
 		while (gpio_get_value(lpi->intr_pin) == 0) {
 			msleep(10);
@@ -353,32 +320,14 @@ static int get_stable_ps_adc_value(uint16_t *ps_adc)
 			}
 		}
 
-		ret = get_ps_adc_value(&value[i]);
+		ret = get_ps_adc_value(&value);
 		if (ret < 0) {
 			pr_err("[PS_ERR][CM36686 error]%s: get_ps_adc_value\n",
 				__func__);
 			return -EIO;
 		}
 
-//		if (wait_count < 60/10) {/*wait gpio less than 60ms*/
-//			msleep(60 - (10*wait_count));
-//		}
-//		wait_count = 0;
-//	}
-
-if( 0 )
-{
-	/*D("Sta_ps: Before sort, value[0, 1, 2] = [0x%x, 0x%x, 0x%x]",
-		value[0], value[1], value[2]);*/
-	mid_val = mid_value(value, 3);
-	D("Sta_ps: After sort, value[0, 1, 2] = [0x%x, 0x%x, 0x%x]\n",
-		value[0], value[1], value[2]);
-	//*ps_adc = (mid_val & 0xFF);
-
-	*ps_adc	= mid_val;
- }
-
-	*ps_adc	= value[0];
+	*ps_adc	= value;
 
 	return 0;
 }
@@ -391,7 +340,7 @@ static void sensor_irq_do_work(struct work_struct *work)
 
   printk( "D[PS] Int, Flag(0x%x)\n", intFlag );
 
-	control_and_report(lpi, CONTROL_INT_ISR_REPORT, intFlag);  
+	isr_report(lpi, intFlag);  
 	  
 	enable_irq(lpi->irq);
 }
@@ -404,16 +353,6 @@ static irqreturn_t cm36686_irq_handler(int irq, void *data)
 	queue_work(lpi->lp_wq, &sensor_irq_work);
 
 	return IRQ_HANDLED;
-}
-
-static int als_power(int enable)
-{
-	struct cm36686_info *lpi = lp_info;
-
-	if (lpi->power)
-		lpi->power(LS_PWR_ON, 1);
-
-	return 0;
 }
 
 static void ls_initial_cmd(struct cm36686_info *lpi)
@@ -448,7 +387,7 @@ static int psensor_enable(struct cm36686_info *lpi)
 		D("[PS][CM36686] %s: already enabled\n", __func__);
 		ret = 0;
 	} else
-  	ret = control_and_report(lpi, CONTROL_PS, 1);
+  	ret = enable_sensor(lpi, CONTROL_PS, 1);
 	
 	mutex_unlock(&ps_enable_mutex);
 	return ret;
@@ -477,7 +416,7 @@ static int psensor_disable(struct cm36686_info *lpi)
 		D("[PS][CM36686] %s: already disabled\n", __func__);
 		ret = 0;
 	} else
-  	ret = control_and_report(lpi, CONTROL_PS,0);
+  	ret = enable_sensor(lpi, CONTROL_PS,0);
 	
 	mutex_unlock(&ps_disable_mutex);
 	return ret;
@@ -528,6 +467,9 @@ static long psensor_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case CAPELLA_CM3602_IOCTL_GET_ENABLED:
 		return put_user(lpi->ps_enable, (unsigned long __user *)arg);
+		break;
+	case CAPELLA_CM3602_IOCTL_GEN_P_EVENT:
+		return psensor_report(lpi, PS_CLOSE_AND_AWAY);
 		break;
 	default:
 		pr_err("[PS][CM36686 error]%s: invalid cmd %d\n",
@@ -610,7 +552,7 @@ static int lightsensor_enable(struct cm36686_info *lpi)
 		D("[LS][CM36686] %s: already enabled\n", __func__);
 		ret = 0;
 	} else
-  	ret = control_and_report(lpi, CONTROL_ALS, 1);
+	ret = enable_sensor(lpi, CONTROL_ALS, 1);
 	
 	mutex_unlock(&als_enable_mutex);
 	return ret;
@@ -626,7 +568,7 @@ static int lightsensor_disable(struct cm36686_info *lpi)
 		D("[LS][CM36686] %s: already disabled\n", __func__);
 		ret = 0;
 	} else
-    ret = control_and_report(lpi, CONTROL_ALS, 0);
+    ret = enable_sensor(lpi, CONTROL_ALS, 0);
 	
 	mutex_unlock(&als_disable_mutex);
 	return ret;
@@ -760,15 +702,10 @@ static ssize_t ps_enable_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	int ps_en;
+	int ps_en = -1;
 	struct cm36686_info *lpi = lp_info;
 
-	ps_en = -1;
 	sscanf(buf, "%d", &ps_en);
-
-	if (ps_en != 0 && ps_en != 1
-		&& ps_en != 10 && ps_en != 13 && ps_en != 16)
-		return -EINVAL;
 
 	if (ps_en) {
 		D("[PS][CM36686] %s: ps_en=%d\n",
@@ -784,47 +721,17 @@ static ssize_t ps_enable_store(struct device *dev,
 
 static DEVICE_ATTR(ps_adc, 0644, ps_adc_show, ps_enable_store);
 
-unsigned PS_cmd_test_value;
-static ssize_t ps_parameters_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
+static ssize_t ps_enable_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
 {
 	int ret;
 	struct cm36686_info *lpi = lp_info;
 
-	ret = sprintf(buf, "PS_close_thd_set = 0x%x, PS_away_thd_set = 0x%x, PS_cmd_cmd:value = 0x%x\n",
-		lpi->ps_close_thd_set, lpi->ps_away_thd_set, PS_cmd_test_value);
+	ret = sprintf(buf, "PS %s\n", lpi->ps_enable ? "enable" : "disable");
 
 	return ret;
 }
-
-static ssize_t ps_parameters_store(struct device *dev,
-				struct device_attribute *attr,
-				const char *buf, size_t count)
-{
-
-	struct cm36686_info *lpi = lp_info;
-	char *token[10];
-	int i;
-
-	printk(KERN_INFO "[PS][CM36686] %s\n", buf);
-	for (i = 0; i < 3; i++)
-		token[i] = strsep((char **)&buf, " ");
-
-	lpi->ps_close_thd_set = simple_strtoul(token[0], NULL, 16);
-	lpi->ps_away_thd_set = simple_strtoul(token[1], NULL, 16);	
-	PS_cmd_test_value = simple_strtoul(token[2], NULL, 16);
-	printk(KERN_INFO
-		"[PS][CM36686]Set PS_close_thd_set = 0x%x, PS_away_thd_set = 0x%x, PS_cmd_cmd:value = 0x%x\n",
-		lpi->ps_close_thd_set, lpi->ps_away_thd_set, PS_cmd_test_value);
-
-	D("[PS][CM36686] %s\n", __func__);
-
-	return count;
-}
-
-static DEVICE_ATTR(ps_parameters, 0644,
-	ps_parameters_show, ps_parameters_store);
-
+static DEVICE_ATTR(ps_enable, 0644, ps_enable_show, ps_enable_store);
 
 static ssize_t ps_conf_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
@@ -836,12 +743,12 @@ static ssize_t ps_conf_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	int code1, code2;
+	int ps_conf1 = 0, ps_conf3 = 0;
 	struct cm36686_info *lpi = lp_info;
 
-	sscanf(buf, "0x%x 0x%x", &code1, &code2);
+	sscanf(buf, "0x%x 0x%x", &ps_conf1, &ps_conf3);
 
-	D("[PS]%s: store value PS conf1 reg = 0x%04x PS conf3 reg = 0x%04x\n", __func__, code1, code2);
+	D("[PS]%s: store value PS conf1 reg = 0x%04x PS conf3 reg = 0x%04x\n", __func__, ps_conf1, ps_conf3);
 
   lpi->ps_conf1_val = code1;
   lpi->ps_conf3_val = code2;
@@ -858,24 +765,31 @@ static ssize_t ps_thd_show(struct device *dev,
 {
 	int ret;
 	struct cm36686_info *lpi = lp_info;
-  ret = sprintf(buf, "[PS][CM36686]PS Hi/Low THD ps_close_thd_set = 0x%04x(%d), ps_away_thd_set = 0x%04x(%d)\n", lpi->ps_close_thd_set, lpi->ps_close_thd_set, lpi->ps_away_thd_set, lpi->ps_away_thd_set);
-  return ret;	
+	uint16_t close_thd = 0, away_thd = 0;
+
+	_cm36686_I2C_Read_Word(lpi->slave_addr, PS_THDH, &close_thd);
+	_cm36686_I2C_Read_Word(lpi->slave_addr, PS_THDL, &away_thd);
+
+	ret = sprintf(buf, "close_thd REG:0x%04x var:0x%04x, away_thd REG:0x%04x var:0x%04x\n", close_thd, lpi->ps_close_thd_set, away_thd, lpi->ps_away_thd_set);
+
+	return ret;
 }
+
 static ssize_t ps_thd_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	int code1, code2;
+	int close_thd = 0, away_thd = 0;
 	struct cm36686_info *lpi = lp_info;
 
-	sscanf(buf, "0x%x 0x%x", &code1, &code2);
+	sscanf(buf, "0x%x 0x%x", &close_thd, &away_thd);
 
-	lpi->ps_close_thd_set = code1;	
-	lpi->ps_away_thd_set = code2;
-	
-      _cm36686_I2C_Write_Word(lpi->slave_addr, PS_THDH, lpi->ps_close_thd_set );
-	  _cm36686_I2C_Write_Word(lpi->slave_addr, PS_THDL, lpi->ps_away_thd_set );
-	
+	lpi->ps_close_thd_set = close_thd;
+	lpi->ps_away_thd_set = away_thd;
+
+	_cm36686_I2C_Write_Word(lpi->slave_addr, PS_THDH, lpi->ps_close_thd_set );
+	_cm36686_I2C_Write_Word(lpi->slave_addr, PS_THDL, lpi->ps_away_thd_set );
+
 	D("[PS][CM36686]%s: ps_close_thd_set = 0x%04x(%d), ps_away_thd_set = 0x%04x(%d)\n", __func__, lpi->ps_close_thd_set, lpi->ps_close_thd_set, lpi->ps_away_thd_set, lpi->ps_away_thd_set);
     
 	return count;
@@ -887,8 +801,12 @@ static ssize_t ps_canc_show(struct device *dev,
 {
 	int ret = 0;
 	struct cm36686_info *lpi = lp_info;
+	uint16_t ps_canc  = 0;
 
-	ret = sprintf(buf, "[PS][CM36686]PS_CANC = 0x%04x(%d)\n", lpi->inte_cancel_set,lpi->inte_cancel_set);
+	_cm36686_I2C_Read_Word(lpi->slave_addr, PS_CANC, &ps_canc);
+
+	ret = sprintf(buf, "PS_CANC: REG:0x%04x var:0x%04x\n",
+			ps_canc, lpi->inte_cancel_set);
 
 	return ret;
 }
@@ -901,60 +819,20 @@ static ssize_t ps_canc_store(struct device *dev,
 
 	sscanf(buf, "0x%x", &code);
 
-	D("[PS][CM36686]PS_CANC: store value = 0x%04x(%d)\n", code,code);
-	
-	lpi->inte_cancel_set = code;	
+	D("[PS][CM36686]PS_CANC: store value = 0x%04x\n", code);
+
+	lpi->inte_cancel_set = code;
 	_cm36686_I2C_Write_Word(lpi->slave_addr, PS_CANC, lpi->inte_cancel_set );
-	
+
 	return count;
 }
+
 static DEVICE_ATTR(ps_canc, 0644, ps_canc_show, ps_canc_store);
-
-static ssize_t ps_hw_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	int ret = 0;
-	struct cm36686_info *lpi = lp_info;
-
-	ret = sprintf(buf, "PS1: reg = 0x%x, PS3: reg = 0x%x, ps_close_thd_set = 0x%x, ps_away_thd_set = 0x%x\n",
-		lpi->ps_conf1_val, lpi->ps_conf3_val, lpi->ps_close_thd_set, lpi->ps_away_thd_set);
-
-	return ret;
-}
-static ssize_t ps_hw_store(struct device *dev,
-				struct device_attribute *attr,
-				const char *buf, size_t count)
-{
-	int code;
-	
-	sscanf(buf, "0x%x", &code);
-
-	D("[PS]%s: store value = 0x%x\n", __func__, code);
-
-	return count;
-}
-static DEVICE_ATTR(ps_hw, 0644, ps_hw_show, ps_hw_store);
 
 static ssize_t ls_adc_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
-	int ret;
-	struct cm36686_info *lpi = lp_info;
 
-	D("[LS][CM36686] %s: ADC = 0x%04X, Level = %d \n",
-		__func__, lpi->current_adc, lpi->current_level);
-	ret = sprintf(buf, "ADC[0x%04X] => level %d\n",
-		lpi->current_adc, lpi->current_level);
-
-	return ret;
-}
-
-static DEVICE_ATTR(ls_adc, 0444, ls_adc_show, NULL);
-
-static ssize_t ls_current_adc_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	
 	struct cm36686_info	*lpi = lp_info;
 
 	int	ret;
@@ -975,22 +853,7 @@ static ssize_t ls_current_adc_show(struct device *dev,
 
 }
 
-static DEVICE_ATTR(ls_current_adc, 0444, ls_current_adc_show, NULL);
-
-static ssize_t ls_lux_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	int ret;
-	struct cm36686_info *lpi = lp_info;
-
-	printk( "Lux = %d\n", lpi->current_lux );
-
-	ret	= sprintf( buf, "%d", lpi->current_lux );
-
-	return ret;
-}
-
-static DEVICE_ATTR(ls_lux, 0444, ls_lux_show, NULL);
+static DEVICE_ATTR(ls_adc, 0444, ls_adc_show, NULL);
 
 static ssize_t ls_ir_ink_store(struct device *dev,
 				struct device_attribute *attr,
@@ -998,10 +861,9 @@ static ssize_t ls_ir_ink_store(struct device *dev,
 {
 	struct cm36686_info *lpi = lp_info;
 	unsigned value = 0;
-	sscanf(buf, "%u", &value);
 
+	sscanf(buf, "%u", &value);
 	lpi->IR_Ink = value;
-	printk( "[IR_Ink] <= %u\n", lpi->IR_Ink );
 
 	return count;
 }
@@ -1012,63 +874,11 @@ static ssize_t ls_ir_ink_show(struct device *dev,
 	int ret;
 	struct cm36686_info *lpi = lp_info;
 
-	printk( "[IR_Ink] <= %u\n", lpi->IR_Ink );
-
-	ret	= sprintf( buf, "%d", lpi->IR_Ink );
-
+	ret	= sprintf(buf, "%d\n", lpi->IR_Ink);
 	return ret;
 }
 
 static DEVICE_ATTR(ls_ir_ink, 0644, ls_ir_ink_show, ls_ir_ink_store );
-
-static ssize_t ls_enable_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-
-	int ret = 0;
-	struct cm36686_info *lpi = lp_info;
-
-	ret = sprintf(buf, "Light sensor Auto Enable = %d\n",
-			lpi->als_enable);
-
-	return ret;
-}
-
-static ssize_t ls_enable_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t count)
-{
-	int ret = 0;
-	int ls_auto;
-	struct cm36686_info *lpi = lp_info;
-
-	ls_auto = -1;
-	sscanf(buf, "%d", &ls_auto);
-
-	if (ls_auto != 0 && ls_auto != 1 && ls_auto != 147)
-		return -EINVAL;
-
-	if (ls_auto) {
-		lpi->ls_calibrate = (ls_auto == 147) ? 1 : 0;
-		ret = lightsensor_enable(lpi);
-	} else {
-		lpi->ls_calibrate = 0;
-		ret = lightsensor_disable(lpi);
-	}
-
-	D("[LS][CM36686] %s: lpi->als_enable = %d, lpi->ls_calibrate = %d, ls_auto=%d\n",
-		__func__, lpi->als_enable, lpi->ls_calibrate, ls_auto);
-
-	if (ret < 0)
-		pr_err(
-		"[LS][CM36686 error]%s: set auto light sensor fail\n",
-		__func__);
-
-	return count;
-}
-
-static DEVICE_ATTR(ls_auto, 0644,
-	ls_enable_show, ls_enable_store);
 
 static ssize_t ls_kadc_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
@@ -1213,8 +1023,13 @@ static ssize_t ls_conf_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	struct cm36686_info *lpi = lp_info;
-	return sprintf(buf, "ALS_CONF = %x\n", lpi->ls_cmd);
+	uint16_t als_conf = 0;
+
+	_cm36686_I2C_Read_Word(lpi->slave_addr, ALS_CONF, &als_conf);
+
+	return sprintf(buf, "ALS_CONF REG:%x, var:%x\n", als_conf, lpi->ls_cmd);
 }
+
 static ssize_t ls_conf_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
@@ -1243,14 +1058,14 @@ static ssize_t ls_fLevel_store(struct device *dev,
 	struct cm36686_info *lpi = lp_info;
 	int value=0;
 	sscanf(buf, "%d", &value);
-	(value>=0)?(value=min(value,10)):(value=max(value,-1));
-	fLevel=value;
+
+	value = (value >= 0 ? min(value,10) : max(value,-1));
+
+	fLevel = value;
 	input_report_abs(lpi->ls_input_dev, ABS_MISC, fLevel);
 	input_sync(lpi->ls_input_dev);
 	printk(KERN_INFO "[LS]set fLevel = %d\n", fLevel);
 
-	msleep(1000);
-	fLevel=-1;
 	return count;
 }
 static DEVICE_ATTR(ls_flevel, 0644, ls_fLevel_show, ls_fLevel_store);
@@ -1387,8 +1202,6 @@ static int cm36686_setup(struct cm36686_info *lpi)
 {
 	int ret = 0;
 
-	als_power(1);
-	msleep(5);
 	ret = gpio_request(lpi->intr_pin, "gpio_cm36686_intr");
 	if (ret < 0) {
 		pr_err("[PS][CM36686 error]%s: gpio %d request failed (%d)\n",
@@ -1711,10 +1524,6 @@ static int cm36686_probe(struct i2c_client *client,
 	if( !enable_power_source( lpi ) )
 		return	-1;
 
-	ps_cancel_set = lpi->inte_cancel_set;
-	
-	lpi->record_clear_int_fail=0;
-	
 	D("[PS][CM36686] %s: ls_cmd 0x%x\n",
 		__func__, lpi->ls_cmd);
 
@@ -1738,7 +1547,6 @@ static int cm36686_probe(struct i2c_client *client,
 
 	mutex_init(&ps_enable_mutex);
 	mutex_init(&ps_disable_mutex);
-	mutex_init(&ps_get_adc_mutex);
 
 	ret = psensor_setup(lpi);
 	if (ret < 0) {
@@ -1775,6 +1583,12 @@ static int cm36686_probe(struct i2c_client *client,
 	}
 	wake_lock_init(&(lpi->ps_wake_lock), WAKE_LOCK_SUSPEND, "proximity");
 
+	lpi->IR_Ink = 9000; //default parameter of light sensor
+
+	//default parameter of proximity sensor
+	lpi->ps_close_thd_set = 0x8f;
+	lpi->ps_away_thd_set = 0x85;
+
 	ret = cm36686_setup(lpi);
 	if (ret < 0) {
 		pr_err("[PS_ERR][CM36686 error]%s: cm36686_setup error!\n", __func__);
@@ -1784,6 +1598,7 @@ static int cm36686_probe(struct i2c_client *client,
 	if (IS_ERR(lpi->cm36686_class)) {
 		ret = PTR_ERR(lpi->cm36686_class);
 		lpi->cm36686_class = NULL;
+		pr_err("[LS][PS][CM36686 error]%s: class_create error!\n", __func__);
 		goto err_create_class;
 	}
 
@@ -1792,21 +1607,12 @@ static int cm36686_probe(struct i2c_client *client,
 	if (unlikely(IS_ERR(lpi->ls_dev))) {
 		ret = PTR_ERR(lpi->ls_dev);
 		lpi->ls_dev = NULL;
+		pr_err("[LS][CM36686 error]%s: device_create error!\n", __func__);
 		goto err_create_ls_device;
 	}
 
 	/* register the attributes */
 	ret = device_create_file(lpi->ls_dev, &dev_attr_ls_adc);
-	if (ret)
-		goto err_create_ls_device_file;
-
-	/* register the attributes */
-	ret = device_create_file(lpi->ls_dev, &dev_attr_ls_current_adc);
-	if (ret)
-		goto err_create_ls_device_file;
-
-	/* register the attributes */
-	ret = device_create_file(lpi->ls_dev, &dev_attr_ls_auto);
 	if (ret)
 		goto err_create_ls_device_file;
 
@@ -1835,10 +1641,6 @@ static int cm36686_probe(struct i2c_client *client,
 	if (ret)
 		goto err_create_ls_device_file;
 
-	ret = device_create_file(lpi->ls_dev, &dev_attr_ls_lux);
-	if (ret)
-		goto err_create_ls_device_file;
-
 	ret = device_create_file(lpi->ls_dev, &dev_attr_ls_ir_ink);
 	if (ret)
 		goto err_create_ls_device_file;
@@ -1848,6 +1650,7 @@ static int cm36686_probe(struct i2c_client *client,
 	if (unlikely(IS_ERR(lpi->ps_dev))) {
 		ret = PTR_ERR(lpi->ps_dev);
 		lpi->ps_dev = NULL;
+		pr_err("[PS][CM36686 error]%s: device_create error!\n", __func__);
 		goto err_create_ls_device_file;
 	}
 
@@ -1856,12 +1659,11 @@ static int cm36686_probe(struct i2c_client *client,
 	if (ret)
 		goto err_create_ps_device;
 
-	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_adc);
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_enable);
 	if (ret)
 		goto err_create_ps_device;
 
-	ret = device_create_file(lpi->ps_dev,
-		&dev_attr_ps_parameters);
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_adc);
 	if (ret)
 		goto err_create_ps_device;
 
@@ -1877,10 +1679,6 @@ static int cm36686_probe(struct i2c_client *client,
 		
 	/* register the attributes */
 	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_canc);
-	if (ret)
-		goto err_create_ps_device;
-		
-	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_hw);
 	if (ret)
 		goto err_create_ps_device;
 
@@ -1910,7 +1708,6 @@ err_psensor_setup:
 	mutex_destroy(&CM36686_control_mutex);
 	mutex_destroy(&ps_enable_mutex);
 	mutex_destroy(&ps_disable_mutex);
-	mutex_destroy(&ps_get_adc_mutex);
 	misc_deregister(&lightsensor_misc);
 err_lightsensor_setup:
 	mutex_destroy(&als_enable_mutex);
@@ -1921,185 +1718,170 @@ err_lightsensor_setup:
 	return ret;
 }
 
-static int control_and_report( struct cm36686_info *lpi, uint8_t mode, uint16_t param ) {
-	int ret=0;
-	uint16_t adc_value = 0;
-	uint16_t ps_data = 0;
-	int level = 0, i, val;
+static unsigned int counter_close = 0;
+static unsigned int counter_away = 10;
 
-	int	ls_high_thd, ls_low_thd;
-	
-  mutex_lock(&CM36686_control_mutex);
-   if( mode == CONTROL_ALS ){
-    if(param){
-      lpi->ls_cmd &= CM36686_ALS_SD_MASK;      
-    } else {
-      lpi->ls_cmd |= CM36686_ALS_SD;
-    }
-    _cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);
-    lpi->als_enable=param;
-  } else if( mode == CONTROL_PS ){
-    if(param){ 
-      lpi->ps_conf1_val &= CM36686_PS_SD_MASK;
-      lpi->ps_conf1_val |= CM36686_PS_INT_IN_AND_OUT;      
-    } else {
-      lpi->ps_conf1_val |= CM36686_PS_SD;
-      lpi->ps_conf1_val &= CM36686_PS_INT_MASK;
-    }
-    _cm36686_I2C_Write_Word(lpi->slave_addr, PS_CONF1, lpi->ps_conf1_val);    
-    lpi->ps_enable=param;  
-  }
-  if((mode == CONTROL_ALS)||(mode == CONTROL_PS)){  
-    if( param==1 ){
-		  msleep(100);  
-    }
-  }
-     	
-  if(lpi->als_enable){
-    if( mode == CONTROL_ALS ||
-      ( mode == CONTROL_INT_ISR_REPORT && 
-      ((param&INT_FLAG_ALS_IF_L)||(param&INT_FLAG_ALS_IF_H)))){
-    
-    	  lpi->ls_cmd &= CM36686_ALS_INT_MASK;
-    	  ret = _cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);  
-      
-        get_ls_adc_value(&adc_value, 0);
-
-if( 0 )
+static int psensor_report(struct cm36686_info *lpi, const int ps_status)
 {
-        if( lpi->ls_calibrate ) {
-        	for (i = 0; i < 10; i++) {
-      	  	if (adc_value <= (*(lpi->cali_table + i))) {
-      		  	level = i;
-      			  if (*(lpi->cali_table + i))
-      				  break;
-      		  }
-      		  if ( i == 9) {/*avoid  i = 10, because 'cali_table' of size is 10 */
-      			  level = i;
-      			  break;
-      		  }
-      	  }
-        } else {
-      	  for (i = 0; i < 10; i++) {
-      		  if (adc_value <= (*(lpi->adc_table + i))) {
-      			  level = i;
-      			  if (*(lpi->adc_table + i))
-      				  break;
-      		  }
-      		  if ( i == 9) {/*avoid  i = 10, because 'cali_table' of size is 10 */
-      			  level = i;
-      			  break;
-      		  }
-      	  }
-    	  }
-    
-    	  ret = set_lsensor_range(((i == 0) || (adc_value == 0)) ? 0 :
-    		   	*(lpi->cali_table + (i - 1)) + 1,
-    		    *(lpi->cali_table + i));
+	uint16_t ps_data = 0;
+	int val = 0;
+
+	if (ps_status != 0){
+		switch(ps_status){
+			case PS_CLOSE_AND_AWAY:
+				get_stable_ps_adc_value(&ps_data);
+				val = (ps_data >= lpi->ps_close_thd_set) ? counter_close++ : counter_away++;
+
+				if (counter_away > 20) {
+					counter_away = 10;
+				}
+
+				if (counter_close >= 10) {
+					counter_close = 0;
+				}
+
+				D( "[PS][CM36686] ADC = %d\n", ps_data );
+				break;
+			case PS_AWAY:
+				val = counter_away;
+				counter_away++;
+				if (counter_away > 20) {
+					counter_away = 10;
+				}
+				D("[PS][CM36686] proximity detected object away\n");
+
+				proximity_sensor_state	= false;
+				break;
+			case PS_CLOSE:
+				val = counter_close;
+				counter_close++;
+				if (counter_close >= 10) {
+					counter_close = 0;
+				}
+				D("[PS][CM36686] proximity detected object close\n");
+
+				proximity_sensor_state	= true;
+				break;
+		};
+
+		wake_lock_timeout( &lpi->ps_wake_lock, HZ / 2 );
+
+		input_report_abs(lpi->ps_input_dev, ABS_DISTANCE, val);
+		input_sync(lpi->ps_input_dev);
+
+		D( "[PS][CM36686] State = %d\n", val );
+	}
+
+	return 0;
 }
 
-	ls_high_thd = adc_value + lpi->ls_thd_high_offset, ls_low_thd = adc_value > lpi->ls_thd_low_offset ? adc_value - lpi->ls_thd_low_offset : 0;
+static int lsensor_report(struct cm36686_info *lpi)
+{
+	uint16_t adc_value = 0;
+	int	ls_high_thd = 0, ls_low_thd = 0;
+	int ret = 0;
+
+	//turn off interrupt
+	lpi->ls_cmd &= CM36686_ALS_INT_MASK;
+	ret = _cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);
+
+	get_ls_adc_value(&adc_value, 0);
+
+	ls_high_thd = adc_value + lpi->ls_thd_high_offset;
+	ls_low_thd = adc_value > lpi->ls_thd_low_offset ? adc_value - lpi->ls_thd_low_offset : 0;
 
 	if( ls_low_thd <= 0x10 )
 		ls_low_thd	= 1;
 
+	//set ALS low/high threshold
 	set_lsensor_range( ls_low_thd, ls_high_thd );
-    	  
-        lpi->ls_cmd |= CM36686_ALS_INT_EN;
-    	  
-        ret = _cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);  
-    	  
-//    		if ((i == 0) || (adc_value == 0))
-//    			D("[LS][CM36686] %s: ADC=0x%03X, Level=%d, l_thd equal 0, h_thd = 0x%x \n",
-//    				__func__, adc_value, level, *(lpi->cali_table + i));
-//    		else
-//    			D("[LS][CM36686] %s: ADC=0x%03X, Level=%d, l_thd = 0x%x, h_thd = 0x%x \n",
-//    				__func__, adc_value, level, *(lpi->cali_table + (i - 1)) + 1, *(lpi->cali_table + i));
-    		lpi->current_level = level;
-    		lpi->current_adc = adc_value;
 
-		{
+	//turn on interrupt
+	lpi->ls_cmd |= CM36686_ALS_INT_EN;
+	ret = _cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);
 
-			static unsigned	Lux_step[] = { 8, 4, 2, 1 };
+	lpi->current_adc = adc_value;
 
-			unsigned	IR_Ink = lpi->IR_Ink, ADC = adc_value, Step = Lux_step[ lpi->ls_cmd >> 6 & 0x3 ];
-			
-			unsigned	Lux = ( IR_Ink * ADC * Step + 5000 ) / 1000 / 100;
+	{
+		static unsigned	Lux_step[] = { 8, 4, 2, 1 };
+		unsigned	IR_Ink = lpi->IR_Ink, ADC = adc_value, Step = Lux_step[ lpi->ls_cmd >> 6 & 0x3 ];
+		unsigned	Lux = ( IR_Ink * ADC * Step + 5000 ) / 1000 / 100;
 
-			static unsigned	Count = 0;
+		Lux	= Lux <= 7 ? 0 : Lux;
+		lpi->current_lux	= Lux;
 
-			Lux	= Lux <= 7 ? 0 : Lux;
+		printk( "[LS][CM36686] [L][A:I:S]=[%d][0x%x:%d:%d]\n", Lux, adc_value, IR_Ink, Step );
 
-			lpi->current_lux	= Lux;
+		input_report_abs( lpi->ls_input_dev, ABS_MISC, Lux );
+		input_sync( lpi->ls_input_dev );
+	}
 
-			if( !Count )
-				printk( "[LS][CM36686] [L][A:I:S]=[%d][0x%x:%d:%d]\n", Lux, adc_value, IR_Ink, Step );
+	return 0;
+}
 
-			Count	= ( Count + 1 ) % 3;
+static int isr_report(struct cm36686_info *lpi, uint16_t param) {
+	int ret = 0;
 
-			input_report_abs( lpi->ls_input_dev, ABS_MISC, Lux );
+	mutex_lock(&CM36686_control_mutex);
 
-			input_sync( lpi->ls_input_dev );
+	if( (lpi->als_enable) && ((param & INT_FLAG_ALS_IF_L) || (param & INT_FLAG_ALS_IF_H)) ){
+		lsensor_report(lpi);
+	}
 
+	if(lpi->ps_enable){
+		int ps_status = 0;
+
+		if ( param & INT_FLAG_PS_IF_CLOSE )
+			ps_status |= PS_CLOSE;
+		if ( param & INT_FLAG_PS_IF_AWAY )
+			ps_status |= PS_AWAY;
+
+		printk( "D[PS] S(%d)\n", ps_status );
+		psensor_report(lpi, ps_status);
+	}
+
+	mutex_unlock(&CM36686_control_mutex);
+	return ret;
+}
+
+static int enable_sensor(struct cm36686_info *lpi, int sensor, const int enable) {
+	int ret = 0;
+
+	mutex_lock(&CM36686_control_mutex);
+
+	if( sensor == CONTROL_ALS ){
+		if(enable){
+			lpi->ls_cmd &= CM36686_ALS_SD_MASK;
+		} else {
+			lpi->ls_cmd |= CM36686_ALS_SD;
+		}
+		_cm36686_I2C_Write_Word(lpi->slave_addr, ALS_CONF, lpi->ls_cmd);
+		lpi->als_enable = enable;
+	} else if( sensor == CONTROL_PS ){
+		if(enable){
+			lpi->ps_conf1_val &= CM36686_PS_SD_MASK;
+			lpi->ps_conf1_val |= CM36686_PS_INT_IN_AND_OUT;
+		} else {
+			lpi->ps_conf1_val |= CM36686_PS_SD;
+			lpi->ps_conf1_val &= CM36686_PS_INT_MASK;
+		}
+		_cm36686_I2C_Write_Word(lpi->slave_addr, PS_CONF1, lpi->ps_conf1_val);
+		lpi->ps_enable = enable;
+	}
+
+	if (enable == 1) {
+		msleep(100);
+
+		if( sensor == CONTROL_ALS ){
+			lsensor_report(lpi);
 		}
 
-    }
-  }
-
-#define PS_CLOSE 1
-#define PS_AWAY  (1<<1)
-#define PS_CLOSE_AND_AWAY PS_CLOSE+PS_AWAY
-   if(lpi->ps_enable){
-    int ps_status = 0;
-
-    if( mode == CONTROL_PS )
-      ps_status = PS_CLOSE_AND_AWAY;   
-    else if(mode == CONTROL_INT_ISR_REPORT ){  
-      if ( param & INT_FLAG_PS_IF_CLOSE )
-        ps_status |= PS_CLOSE;      
-      if ( param & INT_FLAG_PS_IF_AWAY )
-        ps_status |= PS_AWAY;
-    }
-
-printk( "D[PS] S(%d)\n", ps_status );
-
-    if (ps_status!=0){
-      switch(ps_status){
-        case PS_CLOSE_AND_AWAY:
-		  get_stable_ps_adc_value(&ps_data);
-          val = (ps_data >= lpi->ps_close_thd_set) ? 1 : 0;
-
-	  D( "[PS][CM36686] ADC = %d\n", ps_data );
-
-          break;
-        case PS_AWAY:
-          val = 0;
-		  D("[PS][CM36686] proximity detected object away\n");
-
-proximity_sensor_state	= false;
-
-		  break;
-        case PS_CLOSE:
-          val = 1;
-		  D("[PS][CM36686] proximity detected object close\n");
-
-proximity_sensor_state	= true;
-
-          break;
-        };
-
-      wake_lock_timeout( &lpi->ps_wake_lock, HZ / 2 );
-
-      input_report_abs(lpi->ps_input_dev, ABS_DISTANCE, val);      
-      input_sync(lpi->ps_input_dev);
-
-      D( "[PS][CM36686] State = %d\n", val );
-
-    }
-  }
-
-  mutex_unlock(&CM36686_control_mutex);
-  return ret;
+		if( sensor == CONTROL_PS ){
+			psensor_report(lpi, PS_CLOSE_AND_AWAY);
+		}
+	}
+	mutex_unlock(&CM36686_control_mutex);
+	return ret;
 }
 
 static struct of_device_id cm36286_match_table[] = {

@@ -156,6 +156,7 @@ struct lp55xx_chip {
 	enum lp55xx_engine_index engine_idx;
 	struct lp55xx_engine engines[LP55XX_ENGINE_MAX];
 	const struct firmware *fw;
+	struct pinctrl *led_pinctrl;
 };
 
 /*

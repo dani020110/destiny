@@ -3205,11 +3205,13 @@ reset:
 		RETRY_OR_EXIT(retry--, reset, exit);
 	}
 
-	rc = cyttsp4_set_initial_scantype(cd);
-	if (rc < 0) {
-		dev_err(cd->dev, "%s: failed to get scantype rc=%d\n",
-			__func__, rc);
-		RETRY_OR_EXIT(retry--, reset, exit);
+	if (0) {
+		rc = cyttsp4_set_initial_scantype(cd);
+		if (rc < 0) {
+			dev_err(cd->dev, "%s: failed to get scantype rc=%d\n",
+				__func__, rc);
+			RETRY_OR_EXIT(retry--, reset, exit);
+		}
 	}
 
 	rc = cyttsp4_get_ttconfig_info(cd);

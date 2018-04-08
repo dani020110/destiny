@@ -330,10 +330,7 @@ static int mdp3_dmap_config(struct mdp3_dma *dma,
 
 	dma->source_config = *source_config;
 	dma->output_config = *output_config;
-
-	if (dma->output_config.out_sel != MDP3_DMA_OUTPUT_SEL_DSI_CMD)
-		mdp3_irq_enable(MDP3_INTR_LCDC_UNDERFLOW);
-
+	mdp3_irq_enable(MDP3_INTR_LCDC_UNDERFLOW);
 	mdp3_dma_callback_setup(dma);
 	return 0;
 }
@@ -649,7 +646,6 @@ static int mdp3_dmap_update(struct mdp3_dma *dma, void *buf,
 	int cb_type = MDP3_DMA_CALLBACK_TYPE_VSYNC;
 	struct mdss_panel_data *panel;
 	int rc = 0;
-	int retry_count = 2;
 
 	ATRACE_BEGIN(__func__);
 	pr_debug("mdp3_dmap_update\n");
@@ -658,17 +654,10 @@ static int mdp3_dmap_update(struct mdp3_dma *dma, void *buf,
 		cb_type = MDP3_DMA_CALLBACK_TYPE_DMA_DONE;
 		if (intf->active) {
 			ATRACE_BEGIN("mdp3_wait_for_dma_comp");
-retry_dma_done:
 			rc = wait_for_completion_timeout(&dma->dma_comp,
 				KOFF_TIMEOUT);
-			if (rc <= 0 && --retry_count) {
-				int  vsync_status = MDP3_REG_READ(MDP3_REG_INTR_STATUS) &
-							(1 << MDP3_INTR_DMA_P_DONE);
-				if (!vsync_status) {
-					pr_err("%s cmd time out retry count = %d\n",
-						__func__, retry_count);
-					goto retry_dma_done;
-				}
+			if (rc <= 0) {
+				WARN(1, "cmd kickoff timed out (%d)\n", rc);
 				rc = -1;
 			}
 			ATRACE_END("mdp3_wait_for_dma_comp");
@@ -718,20 +707,10 @@ retry_dma_done:
 	pr_debug("mdp3_dmap_update wait for vsync_comp in\n");
 	if (dma->output_config.out_sel == MDP3_DMA_OUTPUT_SEL_DSI_VIDEO) {
 		ATRACE_BEGIN("mdp3_wait_for_vsync_comp");
-retry_vsync:
 		rc = wait_for_completion_timeout(&dma->vsync_comp,
 			KOFF_TIMEOUT);
-		if (rc <= 0 && --retry_count) {
-		    int  vsync_status = MDP3_REG_READ(MDP3_REG_INTR_STATUS) &
-					(1 << MDP3_INTR_LCDC_START_OF_FRAME);
-		    if (!vsync_status) {
-			pr_err("mdp3_dmap_update trying again count = %d\n",
-			       retry_count);
-			goto retry_vsync;
-		    }
-		    rc = -1;
-
-		}
+		if (rc <= 0)
+			rc = -1;
 		ATRACE_END("mdp3_wait_for_vsync_comp");
 	}
 	pr_debug("mdp3_dmap_update wait for vsync_comp out\n");

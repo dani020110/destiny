@@ -40,7 +40,6 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int i = 0;
-	int j = 0;
 
 	if (!pdev) {
 		pr_err("%s: invalid input\n", __func__);
@@ -57,16 +56,11 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 		rc = msm_dss_config_vreg(&pdev->dev,
 			ctrl_pdata->power_data[i].vreg_config,
 			ctrl_pdata->power_data[i].num_vreg, 1);
-		if (rc) {
+		if (rc)
 			pr_err("%s: failed to init vregs for %s\n",
 				__func__, __mdss_dsi_pm_name(i));
-			for (j = i-1; j >= 0; j--) {
-				msm_dss_config_vreg(&pdev->dev,
-				ctrl_pdata->power_data[j].vreg_config,
-				ctrl_pdata->power_data[j].num_vreg, 0);
-			}
-		}
 	}
+
 	return rc;
 }
 
@@ -81,7 +75,7 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		ret = -EINVAL;
 		goto end;
 	}
-	printk("[DISPLAY]%s: + off\n", __func__);/* MM-GL-DISPLAY-panel-00+ */
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -117,7 +111,7 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 			pr_err("%s: failed to disable vregs for %s\n",
 				__func__, __mdss_dsi_pm_name(i));
 	}
-	printk("[DISPLAY]%s: - ret %d\n", __func__, ret);/* MM-GL-DISPLAY-panel-00+ */
+
 end:
 	return ret;
 }
@@ -132,7 +126,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
-	printk("[DISPLAY]%s: + on\n", __func__);/* MM-GL-DISPLAY-panel-00+ */
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -169,7 +163,6 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	 * bootloader. This needs to be done irresepective of whether
 	 * the lp11_init flag is set or not.
 	 */
-	usleep(6000);/*MM-GL-DISPLAY-panel-00+*/
 	if (pdata->panel_info.cont_splash_enabled ||
 		!pdata->panel_info.mipi.lp11_init) {
 		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
@@ -180,7 +173,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 			pr_err("%s: Panel reset failed. rc=%d\n",
 					__func__, ret);
 	}
-	printk("[DISPLAY]%s: - ret %d\n", __func__, ret);/* MM-GL-DISPLAY-panel-00+ */
+
 error:
 	if (ret) {
 		for (; i >= 0; i--)
@@ -207,7 +200,7 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
-	printk("[DISPLAY]%s: + state=%d\n", __func__,power_state);/* MM-GL-DISPLAY-panel-00+ */
+
 	pinfo = &pdata->panel_info;
 	pr_debug("%s: cur_power_state=%d req_power_state=%d\n", __func__,
 		pinfo->panel_power_state, power_state);
@@ -243,7 +236,7 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 			__func__, power_state);
 		ret = -EINVAL;
 	}
-	printk("[DISPLAY]%s: - ret %d\n", __func__, ret);/* MM-GL-DISPLAY-panel-00+ */
+
 	if (!ret)
 		pinfo->panel_power_state = power_state;
 
@@ -461,8 +454,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 	int ret = 0;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *panel_info = NULL;
-	printk("[DISPLAY]%s: + power_state=%d\n", __func__,power_state);/* MM-GL-DISPLAY-panel-00+ */
-	display_on_in_boot = 0;/* MM-GL-DISPLAY-panel-00+ */
+
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
@@ -513,7 +505,6 @@ panel_power_ctrl:
 		panel_info->mipi.frame_rate = panel_info->new_fps;
 
 end:
-	printk("[DISPLAY]%s: - ret %d\n", __func__,ret);/* MM-GL-DISPLAY-panel-00+ */
 	pr_debug("%s-:\n", __func__);
 
 	return ret;
@@ -552,7 +543,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int cur_power_state;
-	printk("[DISPLAY]%s: +\n", __func__);/* MM-GL-DISPLAY-panel-00+ */
+
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
@@ -590,15 +581,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	 * clocks.
 	 */
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_BUS_CLKS, 1);
-
-	/*
-	 * If ULPS during suspend feature is enabled, then DSI PHY was
-	 * left on during suspend. In this case, we do not need to reset/init
-	 * PHY. This would have already been done when the BUS clocks are
-	 * turned on. However, if cont splash is disabled, the first time DSI
-	 * is powered on, phy init needs to be done unconditionally.
-	 */
-	if (!pdata->panel_info.ulps_suspend_enabled || !ctrl_pdata->ulps) {
+	if (!pdata->panel_info.ulps_suspend_enabled) {
 		mdss_dsi_phy_sw_reset(ctrl_pdata);
 		mdss_dsi_phy_init(ctrl_pdata);
 		mdss_dsi_ctrl_setup(ctrl_pdata);
@@ -634,7 +617,6 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 
 end:
-	printk("[DISPLAY]%s: -\n", __func__);/* MM-GL-DISPLAY-panel-00+ */
 	pr_debug("%s-:\n", __func__);
 	return 0;
 }
@@ -645,10 +627,7 @@ static int mdss_dsi_pinctrl_set_state(
 {
 	struct pinctrl_state *pin_state;
 	int rc = -EFAULT;
-	/* MM-GL-DISPLAY-panel-00+[ */
-	if(mdss_display_splash_LK())
-		return 0;
-	/* MM-GL-DISPLAY-panel-00+] */
+
 	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.pinctrl))
 		return PTR_ERR(ctrl_pdata->pin_res.pinctrl);
 
@@ -819,32 +798,6 @@ error:
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 	pr_debug("%s-:End\n", __func__);
 	return ret;
-}
-
-static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
-{
-	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-
-	if (pdata == NULL) {
-		pr_err("%s: Invalid input data\n", __func__);
-		return -EINVAL;
-	}
-
-	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
-				panel_data);
-
-	pr_debug("%s+: ctrl=%p ndx=%d\n", __func__,
-				ctrl_pdata, ctrl_pdata->ndx);
-
-	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
-
-	if (ctrl_pdata->post_panel_on)
-		ctrl_pdata->post_panel_on(pdata);
-
-	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
-	pr_debug("%s-:\n", __func__);
-
-	return 0;
 }
 
 int mdss_dsi_cont_splash_on(struct mdss_panel_data *pdata)
@@ -1262,10 +1215,6 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 				  int event, void *arg)
 {
 	int rc = 0;
-	/*MM-GL-DISPLAY-panel-00+[*/
-	int i=0;
-	struct mdss_panel_info *pinfo = NULL;
-	/*MM-GL-DISPLAY-panel-00+]*/
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int power_state;
 
@@ -1290,28 +1239,11 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 							pdata);
 		break;
 	case MDSS_EVENT_UNBLANK:
-/*MM-GL-DISPLAY-panel-00+[*/
-		if(!is_reset_done)
-		{
-			pinfo = &(ctrl_pdata->panel_data.panel_info);
-			usleep(40000);
-			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
-				gpio_set_value((ctrl_pdata->rst_gpio),
-					pdata->panel_info.rst_seq[i]);
-				if (pdata->panel_info.rst_seq[++i])
-					usleep(pinfo->rst_seq[i] * 1000);
-			}
-			is_reset_done = 1;
-		}
-/*MM-GL-DISPLAY-panel-00+]*/
 		if (ctrl_pdata->refresh_clk_rate)
 			rc = mdss_dsi_clk_refresh(pdata);
 		mdss_dsi_get_hw_revision(ctrl_pdata);
 		if (ctrl_pdata->on_cmds.link_state == DSI_LP_MODE)
 			rc = mdss_dsi_unblank(pdata);
-		break;
-	case MDSS_EVENT_POST_PANEL_ON:
-		rc = mdss_dsi_post_panel_on(pdata);
 		break;
 	case MDSS_EVENT_PANEL_ON:
 		ctrl_pdata->ctrl_state |= CTRL_STATE_MDP_ACTIVE;
@@ -1629,7 +1561,6 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 	return 0;
 
 error_pan_node:
-	mdss_dsi_unregister_bl_settings(ctrl_pdata);
 	of_node_put(dsi_pan_node);
 	i--;
 error_vreg:
@@ -1895,51 +1826,8 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		pr_err("%s:%d, TE gpio not specified\n",
 						__func__, __LINE__);
 
-/* MM-GL-DISPLAY-panel-00-[ *//*
 	ctrl_pdata->bklt_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-bklight-en-gpio", 0);
-*//* MM-GL-DISPLAY-panel-00-] */
-/* MM-GL-DISPLAY-panel-00+[ */
-	ctrl_pdata->disp_p5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-		"qcom,platform-p5-gpio", 0);
-	if (!gpio_is_valid(ctrl_pdata->disp_p5_gpio)) {
-		pr_err("%s:%d, Disp_p5 gpio not specified\n",
-			__func__, __LINE__);
-	}
-	
-//	if(of_machine_is_compatible("qcom,msm8916")){
-//		if((product_phase & 0xFF) != PHASE_EVM)
-//		{
-//			ctrl_pdata->disp_n5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-//				"qcom,platform-n5-1-gpio", 0);
-//	ctrl_pdata->bklt_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-//		"qcom,platform-bklight-en-gpio", 0);
-//		}
-//		else
-//		{
-//			ctrl_pdata->disp_n5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-//				"qcom,platform-n5-gpio", 0);
-//			ctrl_pdata->bklt_en_gpio = -1;
-//		}
-//	}
-//	else
-//	{
-		ctrl_pdata->disp_n5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-			"qcom,platform-n5-1-gpio", 0);
-		ctrl_pdata->bklt_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-			"qcom,platform-bklight-en-gpio", 0);
-//	}
-	if (!gpio_is_valid(ctrl_pdata->disp_n5_gpio)) {
-		pr_err("%s:%d, Disp_n5 gpio not specified\n",
-			__func__, __LINE__);
-	}
-	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-		"qcom,platform-te-gpio", 0);
-	if (!gpio_is_valid(ctrl_pdata->disp_te_gpio)) {
-		pr_err("%s:%d, Disp_te gpio not specified\n",
-			__func__, __LINE__);
-	}
-/* MM-GL-DISPLAY-panel-00+] */
 	if (!gpio_is_valid(ctrl_pdata->bklt_en_gpio))
 		pr_info("%s: bklt_en gpio not specified\n", __func__);
 

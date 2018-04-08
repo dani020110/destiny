@@ -93,12 +93,12 @@
 			label = "cont_splash_mem";
 		};
 
-		dbg_mem: dbg_region@0 {
+		pstore_reserve_mem: pstore_reserve_mem_region@0 {
 			linux,reserve-contiguous-region;
 			linux,reserve-region;
 			linux,remove-completely;
 			reg = <0x0 0xA0000000 0x0 0x400000>;
-			label = "dbg_mem";
+			label = "pstore_reserve_mem";
 		};
 
 		ramdump_mem: ramdump_region@0 {
@@ -483,7 +483,7 @@
 		interrupts = <0 145 0 0 146 0>;
 		interrupt-names = "wcnss_wlantx_irq", "wcnss_wlanrx_irq";
 
-		qcom,pronto-vddmx-supply = <&pm8916_l3_corner_ao>;
+		qcom,pronto-vddmx-supply = <&pm8916_l3>;
 		qcom,pronto-vddcx-supply = <&pm8916_s2_corner>;
 		qcom,pronto-vddpx-supply = <&pm8916_l7>;
 		qcom,iris-vddxo-supply   = <&pm8916_l7>;
@@ -502,10 +502,8 @@
 		clocks = <&clock_rpm clk_xo_wlan_clk>,
 			 <&clock_rpm clk_rf_clk2>,
 			 <&clock_debug clk_gcc_debug_mux>,
-			 <&clock_gcc clk_wcnss_m_clk>,
-			 <&clock_gcc clk_gcc_snoc_qosgen_clk>;
-		clock-names = "xo", "rf_clk", "measure", "wcnss_debug",
-				"snoc_qosgen";
+			 <&clock_gcc clk_wcnss_m_clk>;
+		clock-names = "xo", "rf_clk", "measure", "wcnss_debug";
 
 		qcom,has-autodetect-xo;
 		qcom,is-pronto-vt;
@@ -1090,7 +1088,7 @@
 			 <&clock_gcc clk_gcc_sdcc2_apps_clk>;
 		clock-names = "iface_clk", "core_clk";
 
-		qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
+		qcom,clk-rates = <400000 25000000 50000000 100000000 177770000>;
 
 		status = "disabled";
 	};
@@ -1120,6 +1118,24 @@
 		boot_stats@6b0 {
 			compatible = "qcom,msm-imem-boot_stats";
 			reg = <0x6b0 32>;
+		};
+	};
+
+	ramoops {
+		compatible = "ramoops";
+		status = "ok";
+
+		android,ramoops-buffer-start = <0xA0000000>;
+		android,ramoops-buffer-size = <0x100000>;
+		android,ramoops-console-size = <0x40000>;
+		android,ramoops-record-size = <0x20000>;
+		android,ramoops-ftrace-size = <0x20000>;
+		android,ramoops-pmsg-size = <0x20000>;
+		android,ramoops-dump-oops = <0x1>;
+		linux,contiguous-region = <&pstore_reserve_mem>;
+		android,ramoops-hole {
+			compatible = "qcom,msm-contig-mem";
+			qcom,memblock-reserve = <0xA0000000 0x00100000>;
 		};
 	};
 
@@ -1401,11 +1417,6 @@
 		bt_sco_tx: qcom,msm-dai-q6-bt-sco-tx {
 			compatible = "qcom,msm-dai-q6-dev";
 			qcom,msm-dai-q6-dev-id = <12289>;
-		};
-
-		bt_a2dp_rx: qcom,msm-dai-q6-bt-a2dp-rx {
-			compatible = "qcom,msm-dai-q6-dev";
-			qcom,msm-dai-q6-dev-id = <12290>;
 		};
 
 		int_fm_rx: qcom,msm-dai-q6-int-fm-rx {

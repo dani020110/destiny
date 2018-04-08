@@ -30,18 +30,6 @@
 			};
 		};
 
-        fih_hwid_pin {
-        qcom,pins = <&gp 0>, <&gp 1>, <&gp 2>, <&gp 3>,
-                    <&gp 8>, <&gp 9>, <&gp 107>, <&gp 35>;
-            qcom,num-grp-pins = <8>;
-            qcom,pin-func = <0>;
-            label = "fih_hwid_pin";
-            hwid_init: init {
-                drive-strength = <2>;
-                bias-disable;
-            };
-        };
-
 		cdc-ext-spk-pa {
 			qcom,pins = <&gp 0>;
 			qcom,num-grp-pins = <1>;
@@ -412,9 +400,9 @@
 		};
 
 		tlmm_gpio_key {
-			qcom,pins = <&gp 108>, <&gp 109>, <&gp 51>, <&gp 11>;	/* PERI-JC-KEYPAD_BringUp-00+ */
+			qcom,pins = <&gp 107>, <&gp 108>, <&gp 109>;
 			qcom,pin-func = <0>;
-			qcom,num-grp-pins = <4>;				/* PERI-JC-KEYPAD_BringUp-00+ */
+			qcom,num-grp-pins = <3>;
 			label = "tlmm_gpio_key";
 			gpio_key_active: gpio_key_active {
 				drive-strength = <2>;
@@ -764,8 +752,7 @@
 			mdss_dsi_active: active {
 				drive-strength = <8>; /* 8 mA */
 				bias-disable = <0>; /* no pull */
-				/* MM-GL-DISPLAY-panel-00- *///output-high;
-				output-low;/* MM-GL-DISPLAY-panel-00+ */
+				output-high;
 			};
 			mdss_dsi_suspend: suspend {
 				drive-strength = <2>; /* 2 mA */

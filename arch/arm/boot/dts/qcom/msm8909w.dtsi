@@ -10,12 +10,6 @@
  * GNU General Public License for more details.
  */
 
-/ {
-	chosen {
-		bootargs="sched_enable_hmp=0";
-	};
-};
-
 &soc {
 	/delete-node/ qcom,clock-a7@0b011050;
 	clock_cpu: qcom,clock-a7@0b011050 {
@@ -31,13 +25,11 @@
 		qcom,enable-opp;
 		qcom,speed0-bin-v0 =
 			<          0 0>,
-			<  800000000 4>,
-			< 1267200000 9>;
+			<  800000000 4>;
 
 		qcom,speed2-bin-v0 =
 			<          0 0>,
-			<  800000000 4>,
-			< 1094400000 6>;
+			<  800000000 4>;
 		#clock-cells = <1>;
 	};
 
@@ -52,9 +44,7 @@
 		clock-names = "cpu0_clk", "cpu1_clk",
 				"cpu2_clk", "cpu3_clk";
 		qcom,cpufreq-table =
-			 <  800000 >,
-			 < 1094400 >,
-			 < 1267200 >;
+			 <  800000 >;
 	};
 
 	/delete-node/ qcom,cpubw;
@@ -74,9 +64,7 @@
 		cpubw-cpufreq {
 			target-dev = <&cpubw>;
 			cpu-to-dev-map =
-				 <  800000  2929>,
-				 < 1094400  2929>,
-				 < 1267200  2929>;
+				 <  800000  2929>;
 		};
 	};
 };

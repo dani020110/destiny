@@ -15,6 +15,25 @@
 #include "dsi-panel-somc-tulip.dtsi"
 
 &soc {
+	fih_hwid {
+		compatible = "fih,hwid";
+		/*the gpios order must from 0-7*/
+		gpios = <&msm_gpio 0 0>,   /*HW_ID_0*/
+				<&msm_gpio 1 0>,   /*HW_ID_1*/
+				<&msm_gpio 2 0>,   /*HW_ID_2*/
+				<&msm_gpio 3 0>,   /*HW_ID_3*/
+				<&msm_gpio 8 0>,   /*HW_ID_4*/
+				<&msm_gpio 9 0>,   /*HW_ID_5*/
+				<&msm_gpio 107 0>, /*HW_ID_6*/
+				<&msm_gpio 35 0>;  /*HW_ID_7*/
+		pinctrl-names = "init";
+		pinctrl-0 = <&hwid_init>;
+	};
+
+	fih_gpio {
+		compatible = "fih,gpio";
+	};
+
 	i2c@78b9000 { /* BLSP1 QUP5 */
 		tsc@24 {
 			compatible = "cy,cyttsp4_i2c_adapter";

@@ -388,25 +388,6 @@ static int siminfo_read_proc_open(struct inode *inode, struct file *file)
 
 
 
-/*---------------------------
-    Show the Non-HLOS versioin 
-   ---------------------------*/
-static int nonHLOS_ver_read_proc_show(struct seq_file *m, void *v)
-{
-	seq_printf(m, "%s\n", fih_get_nonHLOS_version());
-
-	return 0;
-
-}
-
-
-static int nonHLOS_ver_read_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, nonHLOS_ver_read_proc_show, NULL);
-}
-
-
-
 /*-----------------------
      Show the HLOS versioin 
    -----------------------*/
@@ -428,27 +409,6 @@ static int HLOS_ver_read_proc_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, HLOS_ver_read_proc_show, NULL);
 }
-
-
-
-/*-------------------------------------
-    Show the Non-HLOS git head information 
-   -------------------------------------*/
-static int nonHLOS_githd_read_proc_show(struct seq_file *m, void *v)
-{
-	seq_printf(m, "%s\n", fih_get_nonHLOS_git_head());
-
-	return 0;
-
-}
-
-
-static int nonHLOS_githd_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, nonHLOS_githd_read_proc_show, NULL);
-}
-
-
 
 /*---------------------------------
      Show the HLOS git head information 
@@ -512,21 +472,9 @@ static const struct file_operations fih_siminfo_proc_fops = {
 	.read		= seq_read,
 };
 
-static const struct file_operations fih_nonHLOS_ver_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= nonHLOS_ver_read_proc_open,
-	.read		= seq_read,
-};
-
 static const struct file_operations fih_HLOS_ver_proc_fops = {
 	.owner		= THIS_MODULE,
 	.open		= HLOS_ver_read_proc_open,
-	.read		= seq_read,
-};
-
-static const struct file_operations fih_nonHLOS_githd_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= nonHLOS_githd_proc_open,
 	.read		= seq_read,
 };
 
@@ -613,15 +561,9 @@ void fih_proc_init(void)
 
 	/* SIM Information */
 	proc_create_data("siminfo", 0, NULL, &fih_siminfo_proc_fops, NULL);
- 
-	/* NON-HLOS image Version */
-	proc_create_data("nonHLOS_ver", 0, NULL, &fih_nonHLOS_ver_proc_fops, NULL);
 
 	/* HLOS image Version */
 	proc_create_data("HLOS_ver", 0, NULL, &fih_HLOS_ver_proc_fops, NULL);
-
-	/* NON-HLOS git haed number */
-	proc_create_data("nonHLOS_git_head", 0, NULL, &fih_nonHLOS_githd_proc_fops, NULL);
 
 	/* HLOS git haed number */
 	proc_create_data("HLOS_git_head", 0, NULL, &fih_HLOS_githd_proc_fops, NULL);

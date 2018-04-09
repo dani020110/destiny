@@ -475,15 +475,9 @@ int dmesg_restrict = 1;
 #else
 int dmesg_restrict;
 #endif
-extern unsigned int debug_dmesg_restrict;	//CORE-KH-DbgCfgTool-klogd-00-a
 
 static int syslog_action_restricted(int type)
 {
-	//CORE-KH-DbgCfgTool-klogd-00-a[
-	if (debug_dmesg_restrict == 0 && dmesg_restrict)
-		dmesg_restrict = 0;
-	//CORE-KH-DbgCfgTool-klogd-00-a]
-	
 	if (dmesg_restrict)
 		return 1;
 	/*
@@ -491,9 +485,6 @@ static int syslog_action_restricted(int type)
 	 * for everybody.
 	 */
 	return type != SYSLOG_ACTION_READ_ALL &&
-    //FIH-CORE-TH-DebugToolPorting-00-a[
-           type != SYSLOG_ACTION_READ &&
-    //FIH-CORE-TH-DebugToolPorting-00-a]
 	       type != SYSLOG_ACTION_SIZE_BUFFER;
 }
 
@@ -520,12 +511,6 @@ static int check_syslog_permissions(int type, bool from_file)
 				 current->comm, task_pid_nr(current));
 			return 0;
 		}
-                /* klogd debug dirty hack test */
-                if (!strncmp(current->comm, "klogd", 5)) {
-                        pr_warn_once("%s (%d): OEM_Launcher attempt to access syslog by klogd\n",
-                                 current->comm, task_pid_nr(current));
-                        return 0;
-                }
 		return -EPERM;
 	}
 	return security_syslog(type);

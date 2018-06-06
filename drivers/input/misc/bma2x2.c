@@ -29,11 +29,13 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <asm/irq.h>
-#include <asm/mach/irq.h>
+//#include <asm/mach/irq.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
+#include <linux/of.h>
+#include <linux/of_gpio.h>
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
@@ -1255,8 +1257,8 @@
 
 /*! Bosch sensor unknown place*/
 #define BOSCH_SENSOR_PLACE_UNKNOWN (-1)
-/*! Bosch sensor remapping table size P0~P7*/
-#define MAX_AXIS_REMAP_TAB_SZ 8
+/*! Bosch sensor remapping table size P0~P8*/
+#define MAX_AXIS_REMAP_TAB_SZ 9
 
 /*!
  * @brief:BMI058 feature
@@ -1387,7 +1389,7 @@ static const struct bma2x2_type_map_t sensor_type_map[] = {
 struct bosch_sensor_specific {
 	char *name;
 	/* 0 to 7 */
-	unsigned int place:3;
+	int place;
 	int irq;
 	int (*irq_gpio_cfg)(void);
 };
@@ -1443,6 +1445,12 @@ struct bma2x2_data {
 	signed char sensor_type;
 	struct input_dev *input;
 
+//CONN-EC-SensorPorting-02+[
+    struct pinctrl      *pinctrl;
+    struct pinctrl_state    *pin_default;
+    struct pinctrl_state    *pin_sleep;
+//CONN-EC-SensorPorting-02+]
+
 	struct bst_dev *bst_acc;
 
 	struct bma2x2acc value;
@@ -1459,6 +1467,8 @@ struct bma2x2_data {
 
 	int ref_count;
 	struct input_dev *dev_interrupt;
+
+	unsigned int int_pin; //CONN-EC-SensorPorting-01+
 
 #ifdef CONFIG_SIG_MOTION
 	struct class *g_sensor_class;
@@ -1506,6 +1516,7 @@ bst_axis_remap_tab_dft[MAX_AXIS_REMAP_TAB_SZ] = {
 	{  1,    0,    2,    -1,     -1,     -1 }, /* P5 */
 	{  0,    1,    2,     1,     -1,     -1 }, /* P6 */
 	{  1,    0,    2,     1,      1,     -1 }, /* P7 */
+	{  2,    1,    0,     1,      1,     -1 }, /* P8 */  //CONN-EC-SensorPorting-01+
 };
 
 
@@ -6515,6 +6526,49 @@ static irqreturn_t bma2x2_irq_handler(int irq, void *handle)
 }
 #endif /* defined(BMA2X2_ENABLE_INT1)||defined(BMA2X2_ENABLE_INT2) */
 
+static int bma2x2_parse_dt(struct device *dev,
+                struct bma2x2_data *pdata)
+{
+    unsigned int temp_val = 0;
+    struct device_node *np = dev->of_node;
+
+    pdata->int_pin = of_get_named_gpio_flags(np,"bosch,int_pin", 0, &temp_val);
+
+    pdata->bst_pd = kzalloc(sizeof(*pdata->bst_pd), GFP_KERNEL);
+
+    of_property_read_u32(np, "bosch,layout",&temp_val);
+    pdata->bst_pd->place = temp_val;
+
+	printk(KERN_INFO "%s: GPIO = %d, layout=%d\n", __func__, pdata->int_pin, pdata->bst_pd->place);
+	return 0;
+}
+
+static int bma2x2_pinctrl_init(struct bma2x2_data *data)
+{
+    struct i2c_client *client = data->bma2x2_client;
+
+    data->pinctrl = devm_pinctrl_get(&client->dev);
+    if (IS_ERR_OR_NULL(data->pinctrl)) {
+        dev_err(&client->dev, "Failed to get pinctrl\n");
+        return PTR_ERR(data->pinctrl);
+    }
+
+    data->pin_default = pinctrl_lookup_state(data->pinctrl,
+            "bma_default");
+    if (IS_ERR_OR_NULL(data->pin_default)) {
+        dev_err(&client->dev, "Failed to look up default state\n");
+        return PTR_ERR(data->pin_default);
+    }
+
+    data->pin_sleep = pinctrl_lookup_state(data->pinctrl,
+            "bma_sleep");
+    if (IS_ERR_OR_NULL(data->pin_sleep)) {
+        dev_err(&client->dev, "Failed to look up sleep state\n");
+        return PTR_ERR(data->pin_sleep);
+    }
+
+    return 0;
+}
 
 static int bma2x2_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
@@ -6563,6 +6617,19 @@ static int bma2x2_probe(struct i2c_client *client,
 	mutex_init(&data->enable_mutex);
 	bma2x2_set_bandwidth(client, BMA2X2_BW_SET);
 	bma2x2_set_range(client, BMA2X2_RANGE_SET);
+
+    /* initialize pinctrl */
+    if (!bma2x2_pinctrl_init(data)) {
+        err = pinctrl_select_state(data->pinctrl, data->pin_default);
+        if (err) {
+            dev_err(&client->dev, "Can't select pinctrl state\n");
+            goto kfree_exit;
+        }
+    }
+
+	if (client->dev.of_node){
+		bma2x2_parse_dt(&client->dev, data);
+	}
 
 #if defined(BMA2X2_ENABLE_INT1) || defined(BMA2X2_ENABLE_INT2)
 
@@ -6620,6 +6687,7 @@ static int bma2x2_probe(struct i2c_client *client,
 	bma2x2_set_Int_Enable(client, 4, 1);
 #endif
 
+	client->irq = gpio_to_irq(data->int_pin);  //CONN-EC-SensorPorting-01+
 	data->IRQ = client->irq;
 	err = request_irq(data->IRQ, bma2x2_irq_handler, IRQF_TRIGGER_RISING,
 			"bma2x2", data);
@@ -6628,6 +6696,8 @@ static int bma2x2_probe(struct i2c_client *client,
 #endif
 	if (err)
 		dev_err(&client->dev,  "could not request irq\n");
+
+	disable_irq(data->IRQ);   //CONN-EC-SensorPorting-01+
 
 	INIT_WORK(&data->irq_work, bma2x2_irq_work_func);
 #endif

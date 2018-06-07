@@ -233,6 +233,7 @@
 			bosch,layout=<0x8>;
 			bmavdd-supply = <&pm8916_l17>;
 			bmavio-supply = <&pm8916_l6>;
+			bosch,place = <8>;
 			bosch,vdd-current-level = <1 210>;
 		};
 

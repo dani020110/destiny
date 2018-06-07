@@ -36,7 +36,6 @@
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
-#include <linux/of.h>
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>

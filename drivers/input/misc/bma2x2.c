@@ -7795,7 +7795,7 @@ static int bma2x2_probe(struct i2c_client *client,
 	atomic_set(&data->delay, POLL_DEFAULT_INTERVAL_MS);
 	atomic_set(&data->enable, 0);
 
-	dev = devm_input_allocate_device(&client->dev);
+	dev = input_allocate_device();
 	if (!dev) {
 		dev_err(&client->dev,
 			"Cannot allocate input device\n");

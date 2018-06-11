@@ -15,9 +15,6 @@
  * This file contains all function implementations for the BMA2X2 in linux
 */
 
-#ifdef CONFIG_SIG_MOTION
-#undef CONFIG_HAS_EARLYSUSPEND
-#endif
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/i2c.h>
@@ -33,10 +30,6 @@
 #include <linux/of_gpio.h>
 #include <linux/sensors.h>
 #include <linux/kthread.h>
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#endif
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
@@ -1540,9 +1533,6 @@ struct bma2x2_data {
 	unsigned char range;
 	unsigned int int_flag;
 	int sensitivity;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend early_suspend;
-#endif
 	int IRQ;
 	struct bma2x2_platform_data *pdata;
 	struct bma2x2_suspend_state suspend_state;
@@ -1569,11 +1559,6 @@ struct bma2x2_data {
 	int tap_time_period;
 #endif
 };
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void bma2x2_early_suspend(struct early_suspend *h);
-static void bma2x2_late_resume(struct early_suspend *h);
-#endif
 
 static int bma2x2_open_init(struct i2c_client *client,
 			struct bma2x2_data *data);
@@ -7971,13 +7956,6 @@ static int bma2x2_probe(struct i2c_client *client,
 		goto bst_free_exit;
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	data->early_suspend.suspend = bma2x2_early_suspend;
-	data->early_suspend.resume = bma2x2_late_resume;
-	register_early_suspend(&data->early_suspend);
-#endif
-
 	data->ref_count = 0;
 	data->fifo_datasel = 0;
 	data->fifo_count = 0;
@@ -8082,58 +8060,11 @@ exit:
 	return err;
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void bma2x2_early_suspend(struct early_suspend *h)
-{
-	struct bma2x2_data *data =
-		container_of(h, struct bma2x2_data, early_suspend);
-
-	mutex_lock(&data->enable_mutex);
-	if (atomic_read(&data->enable) == 1) {
-		bma2x2_set_mode(data->bma2x2_client, BMA2X2_MODE_SUSPEND);
-		if (!data->pdata->int_en) {
-			if (!data->pdata->use_hrtimer)
-				cancel_delayed_work_sync(&data->work);
-			else
-				hrtimer_cancel(&data->accel_timer);
-		}
-	}
-	mutex_unlock(&data->enable_mutex);
-}
-
-static void bma2x2_late_resume(struct early_suspend *h)
-{
-	struct bma2x2_data *data =
-		container_of(h, struct bma2x2_data, early_suspend);
-
-	mutex_lock(&data->enable_mutex);
-	if (atomic_read(&data->enable) == 1) {
-		bma2x2_set_mode(data->bma2x2_client, BMA2X2_MODE_NORMAL);
-		if (!data->pdata->int_en) {
-			if (!data->pdata->use_hrtimer) {
-				queue_delayed_work(data->data_wq,
-				&data->work,
-				msecs_to_jiffies(atomic_read(&data->delay)));
-			} else {
-				ktime = ktime_set(0,
-				atomic_read(&data->delay) * NSEC_PER_MSEC);
-				hrtimer_start(&data->accle_timer,
-						ktime, HRTIMER_MODE_REL);
-			}
-		}
-	}
-	mutex_unlock(&data->enable_mutex);
-}
-#endif
-
 static int bma2x2_remove(struct i2c_client *client)
 {
 	struct bma2x2_data *data = i2c_get_clientdata(client);
 
 	sensors_classdev_unregister(&data->cdev);
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
-#endif
 
 	if (data->bst_acc) {
 		bst_unregister_device(data->bst_acc);

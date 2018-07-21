@@ -271,37 +271,40 @@
 			};
 		};
 
-		cm36286@60 {
-			compatible = "capella,cm36286";
+		capella@60 {
+			compatible = "capella,cm36283", "capella,cm36686";
 			reg = <0x60>;
 			interrupt-parent = <&msm_gpio>;
 			interrupts = <113 0x2>;
-			pinctrl-names = "pls_active","pls_suspend";
-			pinctrl-0 = <&cm_int_active>;
-			pinctrl-1 = <&cm_int_suspend>;
-			intr = <&msm_gpio 113 0>;
-			cm36286,slave_addr = <0x60>;
-			cm36286,levels = <0x0A 0xA0 0xE1 0x140 0x280 0x500 0xA28 0x16A8 0x1F40 0x2800>;
-			cm36286,ps_close_thd_set = <0xffff>;
-			cm36286,ps_away_thd_set = <0x1>;
-			cm36286,ls_thd_high_offset = <0xa>;
-			cm36286,ls_thd_low_offset = <0xa>;
 			vdd-supply = <&pm8916_l17>;
-			vcc_i2c-supply = <&pm8916_l6>;
-			cm36286,vdd_power = < 2850000 2850000 15000 >;
-			cm36286,i2c_power = < 1800000 1800000 15000 >;
+			vio-supply = <&pm8916_l6>;
 
+			//Unfortunately, cm36283 does not have pinctrl support :(
+			//pinctrl-names = "pls_active","pls_suspend";
+			//pinctrl-0 = <&cm_int_active>;
+			//pinctrl-1 = <&cm_int_suspend>;
+
+			//cm36286,slave_addr = <0x60>; //cm36283 seems to use the reg property declared above for the slave address
+			//cm36286,vdd_power = < 2850000 2850000 15000 >;
+			//cm36286,i2c_power = < 1800000 1800000 15000 >;
+			//cm36286,ls_thd_high_offset = <0xa>;
+			//cm36286,ls_thd_low_offset = <0xa>;
+
+			capella,interrupt-gpio = <&msm_gpio 113 0>; //<&msm_gpio 113 0>;
+			capella,levels = <0x0A 0xA0 0xE1 0x140 0x280 0x500 0xA28 0x16A8 0x1F40 0x2800>;
+			capella,ps_close_thd_set = <0xffff>;
+			capella,ps_away_thd_set = <0x1>;
 			/* CM36686_ALS_IT_160ms | CM36686_ALS_PERS_4 */
 			/* 0x40 | 0x8  */
-			cm36286,ls_cmd = <0x48>;
+			capella,ls_cmd = <0x48>;
 
 			/* CM36686_PS_IT_1T | CM36686_PS_DR_1_40 | CM36686_PS_PERS_2 */
 			/* 0 | 0 | 0x10 */
-			cm36286,ps_conf1_val = <0x10>;
+			capella,ps_conf1_val = <0x10>;
 
 			/* CM36686_PS_MS_NORMAL | CM36686_LED_I_75 */
 			/* 0 | 0x100 */
-			cm36286,ps_conf3_val = <0x100>;
+			capella,ps_conf3_val = <0x100>;
 		};
 	};
 };

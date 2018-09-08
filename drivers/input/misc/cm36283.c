@@ -21,7 +21,6 @@
 #include <linux/input.h>
 #include <linux/sensors.h>
 #include <linux/interrupt.h>
-#include <linux/ioctl.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
@@ -36,8 +35,6 @@
 #include <linux/jiffies.h>
 #include <linux/cm36283.h>
 #include <linux/of_gpio.h>
-#include <linux/types.h>
-#include <linux/ioctl.h>
 
 #include <asm/uaccess.h>
 #include <asm/setup.h>
@@ -49,9 +46,6 @@
 #define CONTROL_INT_ISR_REPORT        0x00
 #define CONTROL_ALS                   0x01
 #define CONTROL_PS                    0x02
-
-#define NAME_PROXIMITY "cm36686-ps"
-#define NAME_LIGHT "cm36686-ls"
 
 /* POWER SUPPLY VOLTAGE RANGE */
 #define CM36283_VDD_MIN_UV	2700000
@@ -69,7 +63,7 @@
 #define CM36283_PS_DEFAULT_POLL_DELAY	100
 
 static struct sensors_classdev sensors_light_cdev = {
-	.name = NAME_LIGHT,
+	.name = "cm36283-light",
 	.vendor = "Capella",
 	.version = 1,
 	.handle = SENSORS_LIGHT_HANDLE,
@@ -87,7 +81,7 @@ static struct sensors_classdev sensors_light_cdev = {
 };
 
 static struct sensors_classdev sensors_proximity_cdev = {
-	.name = NAME_PROXIMITY,
+	.name = "cm36283-proximity",
 	.vendor = "Capella",
 	.version = 1,
 	.handle = SENSORS_PROXIMITY_HANDLE,
@@ -1329,7 +1323,7 @@ static int lightsensor_setup(struct cm36283_info *lpi)
 			__func__);
 		return -ENOMEM;
 	}
-	lpi->ls_input_dev->name = NAME_LIGHT;
+	lpi->ls_input_dev->name = "cm36283-ls";
 	lpi->ls_input_dev->id.bustype = BUS_I2C;
 	set_bit(EV_ABS, lpi->ls_input_dev->evbit);
 
@@ -1358,7 +1352,7 @@ static int psensor_setup(struct cm36283_info *lpi)
 			__func__);
 		return -ENOMEM;
 	}
-	lpi->ps_input_dev->name = NAME_PROXIMITY;
+	lpi->ps_input_dev->name = "cm36283-ps";
 	lpi->ps_input_dev->id.bustype = BUS_I2C;
 	set_bit(EV_ABS, lpi->ps_input_dev->evbit);
 	input_set_abs_params(lpi->ps_input_dev, ABS_DISTANCE, 0, 1, 0, 0);
@@ -2057,7 +2051,6 @@ static const struct i2c_device_id cm36283_i2c_id[] = {
 
 static struct of_device_id cm36283_match_table[] = {
 	{ .compatible = "capella,cm36283",},
-	{ .compatible = "capella,cm36686",},
 	{ },
 };
 

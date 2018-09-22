@@ -1672,6 +1672,7 @@ static int bma2x2_smbus_read_byte(struct i2c_client *client,
 		unsigned char reg_addr, unsigned char *data)
 {
 	s32 dummy;
+
 	dummy = i2c_smbus_read_byte_data(client, reg_addr);
 	if (dummy < 0)
 		return -EIO;
@@ -1696,6 +1697,7 @@ static int bma2x2_smbus_read_byte_block(struct i2c_client *client,
 		unsigned char reg_addr, unsigned char *data, unsigned char len)
 {
 	s32 dummy;
+
 	dummy = i2c_smbus_read_i2c_block_data(client, reg_addr, len, data);
 	if (dummy < 0)
 		return -EIO;
@@ -1730,7 +1732,7 @@ static int bma_i2c_burst_read(struct i2c_client *client, u8 reg_addr,
 			I2C_RETRY_DELAY();
 	}
 
-	if (BMA_MAX_RETRY_I2C_XFER <= retry) {
+	if (retry >= BMA_MAX_RETRY_I2C_XFER) {
 		dev_err(&client->dev, "I2C xfer error");
 		return -EIO;
 	}
@@ -1755,8 +1757,8 @@ static int bma2x2_check_chip_id(struct i2c_client *client,
 							&chip_id);
 		if (err < 0) {
 			dev_err(&client->dev,
-			"Bosch Sensortec Device not found"
-			"i2c bus read error, read chip_id:%d\n", chip_id);
+			"Bosch Sensortec Device not found! i2c bus read error, read chip_id:%d\n",
+			chip_id);
 			err = -ENODEV;
 			return err;
 		}
@@ -1776,8 +1778,7 @@ static int bma2x2_check_chip_id(struct i2c_client *client,
 			return err;
 		} else if (read_count == CHECK_CHIP_ID_TIME_MAX) {
 			dev_err(&client->dev,
-			"Failed!Bosch Sensortec Device"
-			" not found, mismatch chip_id:%d\n",
+			"Failed! Bosch Sensortec Device not found, mismatch chip_id:%d\n",
 						chip_id);
 			err = -ENODEV;
 			return err;
@@ -1829,6 +1830,7 @@ static int bma2x2_set_int1_pad_sel(struct i2c_client *client, unsigned char
 	int comres = 0;
 	unsigned char data;
 	unsigned char state;
+
 	state = 0x01;
 
 
@@ -1913,6 +1915,7 @@ static int bma2x2_set_int2_pad_sel(struct i2c_client *client, unsigned char
 	int comres = 0;
 	unsigned char data;
 	unsigned char state;
+
 	state = 0x01;
 
 
@@ -1990,12 +1993,12 @@ static int bma2x2_set_int2_pad_sel(struct i2c_client *client, unsigned char
 #endif /* BMA2X2_ENABLE_INT2 */
 
 static int bma2x2_set_Int_Enable(struct i2c_client *client, unsigned char
-		InterruptType , unsigned char value)
+		InterruptType, unsigned char value)
 {
 	int comres = 0;
 	unsigned char data1, data2;
 
-	if ((11 < InterruptType) && (InterruptType < 16)) {
+	if ((InterruptType > 11) && (InterruptType < 16)) {
 		switch (InterruptType) {
 		case 12:
 			/* slow/no motion X Interrupt  */
@@ -2875,6 +2878,7 @@ static int bma2x2_normal_to_suspend(struct bma2x2_data *bma2x2,
 {
 	unsigned char current_fifo_mode;
 	unsigned char current_op_mode;
+
 	if (bma2x2 == NULL)
 		return -EINVAL;
 	/* get current op mode from mode register */
@@ -2918,17 +2922,17 @@ static int bma2x2_set_mode(struct i2c_client *client, unsigned char mode)
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 
 	mutex_lock(&bma2x2->mode_mutex);
-	if (BMA2X2_MODE_SUSPEND == mode) {
+	if (mode == BMA2X2_MODE_SUSPEND) {
 		if (bma2x2->ref_count > 0) {
 			bma2x2->ref_count--;
-			if (0 < bma2x2->ref_count) {
+			if (bma2x2->ref_count > 0) {
 				mutex_unlock(&bma2x2->mode_mutex);
 				return 0;
 			}
 		}
 	} else {
 		bma2x2->ref_count++;
-		if (1 < bma2x2->ref_count) {
+		if (bma2x2->ref_count > 1) {
 			mutex_unlock(&bma2x2->mode_mutex);
 			return 0;
 		}
@@ -3566,6 +3570,7 @@ static int bma2x2_write_reg(struct i2c_client *client, unsigned char addr,
 		unsigned char *data)
 {
 	int comres = 0;
+
 	comres = bma2x2_smbus_write_byte(client, addr, data);
 
 	return comres;
@@ -5743,6 +5748,7 @@ static int bma2x2_eeprom_prog(struct i2c_client *client)
 {
 	int res = 0, timeout = 0;
 	unsigned char databuf;
+
 	res = bma2x2_smbus_read_byte(client, BMA2X2_EEPROM_CTRL_REG,
 					&databuf);
 	if (res < 0) {
@@ -6152,14 +6158,15 @@ static ssize_t bma2x2_fifo_data_sel_show(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 	signed char place = BOSCH_SENSOR_PLACE_UNKNOWN;
+
 	if (bma2x2_get_fifo_data_sel(bma2x2->bma2x2_client, &data) < 0)
 		return snprintf(buf, PAGE_SIZE, "Read error\n");
 
 #ifdef CONFIG_SENSORS_BMI058
 /*Update BMI058 fifo_data_sel to the BMA2x2 common definition*/
-	if (BMI058_FIFO_DAT_SEL_X == data)
+	if (data == BMI058_FIFO_DAT_SEL_X)
 		data = BMA2X2_FIFO_DAT_SEL_X;
-	else if (BMI058_FIFO_DAT_SEL_Y == data)
+	else if (data == BMI058_FIFO_DAT_SEL_Y)
 		data = BMA2X2_FIFO_DAT_SEL_Y;
 #endif
 
@@ -6170,9 +6177,9 @@ static ssize_t bma2x2_fifo_data_sel_show(struct device *dev,
 		/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
 		* but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
 		* so we need to +1*/
-		if (BMA2X2_FIFO_DAT_SEL_X == data)
+		if (data == BMA2X2_FIFO_DAT_SEL_X)
 			data = bst_axis_remap_tab_dft[place].src_x + 1;
-		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+		else if (data == BMA2X2_FIFO_DAT_SEL_Y)
 			data = bst_axis_remap_tab_dft[place].src_y + 1;
 	}
 
@@ -6256,16 +6263,16 @@ static ssize_t bma2x2_fifo_data_sel_store(struct device *dev,
 		/* BMA2X2_FIFO_DAT_SEL_X: 1, Y:2, Z:3;
 		  * but bst_axis_remap_tab_dft[i].src_x:0, y:1, z:2
 		  * so we need to +1*/
-		if (BMA2X2_FIFO_DAT_SEL_X == data)
+		if (data == BMA2X2_FIFO_DAT_SEL_X)
 			data =  bst_axis_remap_tab_dft[place].src_x + 1;
-		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+		else if (data == BMA2X2_FIFO_DAT_SEL_Y)
 			data =  bst_axis_remap_tab_dft[place].src_y + 1;
 	}
 #ifdef CONFIG_SENSORS_BMI058
 	/*Update BMI058 fifo_data_sel to the BMA2x2 common definition*/
-	if (BMA2X2_FIFO_DAT_SEL_X == data)
+	if (data == BMA2X2_FIFO_DAT_SEL_X)
 		data = BMI058_FIFO_DAT_SEL_X;
-	else if (BMA2X2_FIFO_DAT_SEL_Y == data)
+	else if (data == BMA2X2_FIFO_DAT_SEL_Y)
 		data = BMI058_FIFO_DAT_SEL_Y;
 
 #endif
@@ -6337,6 +6344,7 @@ static ssize_t bma2x2_fifo_data_out_frame_show(struct device *dev,
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 	struct bma2x2acc acc_lsb;
 	unsigned char axis_dir_remap = 0;
+
 	if (bma2x2->fifo_datasel) {
 		/*Select one axis data output for every fifo frame*/
 		f_len = 2;
@@ -6718,116 +6726,116 @@ static void bma2x2_tap_timeout_handle(unsigned long data)
 }
 #endif
 
-static DEVICE_ATTR(range, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(range, 0644,
 		bma2x2_range_show, bma2x2_range_store);
-static DEVICE_ATTR(bandwidth, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(bandwidth, 0644,
 		bma2x2_bandwidth_show, bma2x2_bandwidth_store);
-static DEVICE_ATTR(op_mode, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(op_mode, 0644,
 		bma2x2_mode_show, bma2x2_mode_store);
-static DEVICE_ATTR(value, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(value, 0444,
 		bma2x2_value_show, NULL);
-static DEVICE_ATTR(value_cache, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(value_cache, 0444,
 		bma2x2_value_cache_show, NULL);
-static DEVICE_ATTR(delay, S_IRUSR|S_IRGRP|S_IWUSR|S_IWGRP,
+static DEVICE_ATTR(delay, 0644,
 		bma2x2_delay_show, bma2x2_delay_store);
-static DEVICE_ATTR(enable, S_IRUSR|S_IRGRP|S_IWUSR|S_IWGRP,
+static DEVICE_ATTR(enable, 0644,
 		bma2x2_enable_show, bma2x2_enable_store);
-static DEVICE_ATTR(SleepDur, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(SleepDur, 0644,
 		bma2x2_SleepDur_show, bma2x2_SleepDur_store);
-static DEVICE_ATTR(fast_calibration_x, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fast_calibration_x, 0644,
 		bma2x2_fast_calibration_x_show,
 		bma2x2_fast_calibration_x_store);
-static DEVICE_ATTR(fast_calibration_y, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fast_calibration_y, 0644,
 		bma2x2_fast_calibration_y_show,
 		bma2x2_fast_calibration_y_store);
-static DEVICE_ATTR(fast_calibration_z, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fast_calibration_z, 0644,
 		bma2x2_fast_calibration_z_show,
 		bma2x2_fast_calibration_z_store);
-static DEVICE_ATTR(fifo_mode, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fifo_mode, 0644,
 		bma2x2_fifo_mode_show, bma2x2_fifo_mode_store);
-static DEVICE_ATTR(fifo_framecount, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fifo_framecount, 0644,
 		bma2x2_fifo_framecount_show, bma2x2_fifo_framecount_store);
-static DEVICE_ATTR(fifo_trig, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fifo_trig, 0644,
 		bma2x2_fifo_trig_show, bma2x2_fifo_trig_store);
-static DEVICE_ATTR(fifo_trig_src, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fifo_trig_src, 0644,
 		bma2x2_fifo_trig_src_show, bma2x2_fifo_trig_src_store);
-static DEVICE_ATTR(fifo_data_sel, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(fifo_data_sel, 0644,
 		bma2x2_fifo_data_sel_show, bma2x2_fifo_data_sel_store);
-static DEVICE_ATTR(fifo_data_frame, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(fifo_data_frame, 0444,
 		bma2x2_fifo_data_out_frame_show, NULL);
-static DEVICE_ATTR(reg, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(reg, 0644,
 		bma2x2_register_show, bma2x2_register_store);
-static DEVICE_ATTR(chip_id, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(chip_id, 0444,
 		bma2x2_chip_id_show, NULL);
-static DEVICE_ATTR(offset_x, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(offset_x, 0644,
 		bma2x2_offset_x_show,
 		bma2x2_offset_x_store);
-static DEVICE_ATTR(offset_y, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(offset_y, 0644,
 		bma2x2_offset_y_show,
 		bma2x2_offset_y_store);
-static DEVICE_ATTR(offset_z, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(offset_z, 0644,
 		bma2x2_offset_z_show,
 		bma2x2_offset_z_store);
-static DEVICE_ATTR(enable_int, S_IWUSR,
+static DEVICE_ATTR(enable_int, 0200,
 		NULL, bma2x2_enable_int_store);
-static DEVICE_ATTR(int_mode, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(int_mode, 0644,
 		bma2x2_int_mode_show, bma2x2_int_mode_store);
-static DEVICE_ATTR(slope_duration, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(slope_duration, 0644,
 		bma2x2_slope_duration_show, bma2x2_slope_duration_store);
-static DEVICE_ATTR(slope_threshold, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(slope_threshold, 0644,
 		bma2x2_slope_threshold_show, bma2x2_slope_threshold_store);
-static DEVICE_ATTR(slope_no_mot_duration, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(slope_no_mot_duration, 0644,
 		bma2x2_slope_no_mot_duration_show,
 			bma2x2_slope_no_mot_duration_store);
-static DEVICE_ATTR(slope_no_mot_threshold, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(slope_no_mot_threshold, 0644,
 		bma2x2_slope_no_mot_threshold_show,
 			bma2x2_slope_no_mot_threshold_store);
-static DEVICE_ATTR(high_g_duration, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(high_g_duration, 0644,
 		bma2x2_high_g_duration_show, bma2x2_high_g_duration_store);
-static DEVICE_ATTR(high_g_threshold, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(high_g_threshold, 0644,
 		bma2x2_high_g_threshold_show, bma2x2_high_g_threshold_store);
-static DEVICE_ATTR(low_g_duration, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(low_g_duration, 0644,
 		bma2x2_low_g_duration_show, bma2x2_low_g_duration_store);
-static DEVICE_ATTR(low_g_threshold, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(low_g_threshold, 0644,
 		bma2x2_low_g_threshold_show, bma2x2_low_g_threshold_store);
-static DEVICE_ATTR(tap_duration, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_duration, 0644,
 		bma2x2_tap_duration_show, bma2x2_tap_duration_store);
-static DEVICE_ATTR(tap_threshold, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_threshold, 0644,
 		bma2x2_tap_threshold_show, bma2x2_tap_threshold_store);
-static DEVICE_ATTR(tap_quiet, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_quiet, 0644,
 		bma2x2_tap_quiet_show, bma2x2_tap_quiet_store);
-static DEVICE_ATTR(tap_shock, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_shock, 0644,
 		bma2x2_tap_shock_show, bma2x2_tap_shock_store);
-static DEVICE_ATTR(tap_samp, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_samp, 0644,
 		bma2x2_tap_samp_show, bma2x2_tap_samp_store);
-static DEVICE_ATTR(orient_mode, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(orient_mode, 0644,
 		bma2x2_orient_mode_show, bma2x2_orient_mode_store);
-static DEVICE_ATTR(orient_blocking, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(orient_blocking, 0644,
 		bma2x2_orient_blocking_show, bma2x2_orient_blocking_store);
-static DEVICE_ATTR(orient_hyst, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(orient_hyst, 0644,
 		bma2x2_orient_hyst_show, bma2x2_orient_hyst_store);
-static DEVICE_ATTR(orient_theta, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(orient_theta, 0644,
 		bma2x2_orient_theta_show, bma2x2_orient_theta_store);
-static DEVICE_ATTR(flat_theta, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(flat_theta, 0644,
 		bma2x2_flat_theta_show, bma2x2_flat_theta_store);
-static DEVICE_ATTR(flat_hold_time, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(flat_hold_time, 0644,
 		bma2x2_flat_hold_time_show, bma2x2_flat_hold_time_store);
-static DEVICE_ATTR(selftest, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(selftest, 0644,
 		bma2x2_selftest_show, bma2x2_selftest_store);
-static DEVICE_ATTR(softreset, S_IWUSR,
+static DEVICE_ATTR(softreset, 0200,
 		NULL, bma2x2_softreset_store);
-static DEVICE_ATTR(temperature, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(temperature, 0444,
 		bma2x2_temperature_show, NULL);
-static DEVICE_ATTR(place, S_IRUSR|S_IRGRP,
+static DEVICE_ATTR(place, 0444,
 		bma2x2_place_show, NULL);
 #ifdef CONFIG_SIG_MOTION
-static DEVICE_ATTR(en_sig_motion, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(en_sig_motion, 0644,
 		bma2x2_en_sig_motion_show, bma2x2_en_sig_motion_store);
 #endif
 #ifdef CONFIG_DOUBLE_TAP
-static DEVICE_ATTR(tap_time_period, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(tap_time_period, 0644,
 		bma2x2_tap_time_period_show, bma2x2_tap_time_period_store);
-static DEVICE_ATTR(en_double_tap, S_IRUSR|S_IRGRP|S_IWUSR,
+static DEVICE_ATTR(en_double_tap, 0644,
 		bma2x2_en_double_tap_show, bma2x2_en_double_tap_store);
 #endif
 
@@ -6974,9 +6982,8 @@ static void bma2x2_high_g_interrupt_handle(struct bma2x2_data *bma2x2)
 		}
 
 		ISR_INFO(&bma2x2->bma2x2_client->dev,
-			"High G interrupt happened,exis is %d,"
-					"first is %d,sign is %d\n", i,
-						first_value, sign_value);
+			"High G interrupt happened, exis is %d, first is %d, sign is %d\n",
+					i, first_value, sign_value);
 	}
 
 
@@ -6988,6 +6995,7 @@ static void bma2x2_slope_interrupt_handle(struct bma2x2_data *bma2x2)
 	unsigned char first_value = 0;
 	unsigned char sign_value = 0;
 	int i;
+
 	for (i = 0; i < 3; i++) {
 		bma2x2_get_slope_first(bma2x2->bma2x2_client, i, &first_value);
 		if (first_value == 1) {
@@ -7024,9 +7032,8 @@ static void bma2x2_slope_interrupt_handle(struct bma2x2_data *bma2x2)
 		}
 
 		ISR_INFO(&bma2x2->bma2x2_client->dev,
-			"Slop interrupt happened,exis is %d,"
-					"first is %d,sign is %d\n", i,
-						first_value, sign_value);
+			"Slop interrupt happened, exis is %d, first is %d, sign is %d\n",
+					i, first_value, sign_value);
 	}
 }
 #endif
@@ -7507,6 +7514,7 @@ static int bma2x2_open_init(struct i2c_client *client,
 			struct bma2x2_data *data)
 {
 	int err;
+
 	err = bma2x2_set_bandwidth(client, data->bandwidth);
 	if (err < 0) {
 		dev_err(&client->dev, "init bandwidth error\n");
@@ -8109,6 +8117,7 @@ static int bma2x2_store_state(struct i2c_client *client,
 				struct bma2x2_data *data)
 {
 	int err;
+
 	err = bma2x2_get_bandwidth(client, &(data->bandwidth));
 	if (err < 0) {
 		dev_err(&client->dev, "get state bandwidth failed\n");

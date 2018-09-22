@@ -2503,12 +2503,11 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
                    "wlan: connection failed with " MAC_ADDRESS_STR " result:%d and Status:%d",
                     MAC_ADDR_ARRAY(pWextState->req_bssId),
                     roamResult, roamStatus);
-
-        if (( eCSR_ROAM_ASSOCIATION_FAILURE == roamStatus) ||
-            ((roamResult != eCSR_ROAM_RESULT_ASSOCIATED) &&
-             (eCSR_ROAM_ASSOCIATION_COMPLETION == roamStatus)))
+        if (!pHddStaCtx->get_mgmt_log_sent) {
+            pHddStaCtx->get_mgmt_log_sent = TRUE;
             wlan_hdd_get_frame_logs(pAdapter,
                                 WLAN_HDD_GET_FRAME_LOG_CMD_SEND_AND_CLEAR);
+        }
 
         if ((eCSR_ROAM_RESULT_SCAN_FOR_SSID_FAILURE == roamResult) ||
            (pRoamInfo &&
@@ -4421,10 +4420,18 @@ static tANI_S32 hdd_ProcessGENIE(hdd_adapter_t *pAdapter,
         pRsnIe = gen_ie + 2 + 4;
         RSNIeLen = gen_ie_len - (2 + 4);
         // Unpack the WPA IE
-        dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
+        status = dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
                             pRsnIe,
                             RSNIeLen,
                             &dot11WPAIE);
+        if (DOT11F_FAILED(status))
+        {
+            hddLog(LOGE,
+                   FL("Parse failure in hdd_ProcessGENIE (0x%08x)"),
+                   status);
+            return -EINVAL;
+        }
+
         // Copy out the encryption and authentication types
         hddLog(LOG1, FL("%s: WPA unicast cipher suite count: %d"),
                __func__, dot11WPAIE.unicast_cipher_count );

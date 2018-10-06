@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -187,7 +187,7 @@ static int dsi_event_handler(struct mdss_panel_data *pdata,
 	case MDSS_EVENT_PANEL_CLK_CTRL:
 		rc = dsi_clk_ctrl(pdata, (int)arg);
 		break;
-	case MDSS_EVENT_DSI_DYNAMIC_SWITCH:
+	case MDSS_EVENT_DSI_UPDATE_PANEL_DATA:
 		rc = dsi_update_pconfig(pdata, (int)(unsigned long) arg);
 		break;
 	default:
@@ -511,6 +511,7 @@ int dsi_panel_device_register_v2(struct platform_device *dev,
 	u8 lanes = 0, bpp;
 	u32 h_period, v_period;
 	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
+	struct device_node *fb_node;
 
 	h_period = ((pinfo->lcdc.h_pulse_width)
 			+ (pinfo->lcdc.h_back_porch)
@@ -566,10 +567,16 @@ int dsi_panel_device_register_v2(struct platform_device *dev,
 
 	ctrl_pdata->panel_data.event_handler = dsi_event_handler;
 
+	fb_node = of_parse_phandle(dev->dev.of_node, "qcom,mdss-fb-map", 0);
+	if (!fb_node) {
+		pr_err("Unable to find fb node for device: %s\n", dev->name);
+		return -ENODEV;
+	}
+
 	/*
 	 * register in mdp driver
 	 */
-	rc = mdss_register_panel(dev, &(ctrl_pdata->panel_data));
+	rc = mdss_register_panel(dev, &(ctrl_pdata->panel_data), fb_node);
 	if (rc) {
 		dev_err(&dev->dev, "unable to register MIPI DSI panel\n");
 		return rc;

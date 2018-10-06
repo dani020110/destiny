@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -109,6 +109,12 @@
 #define OP_ILI9341_INTERFACE_CONTROL	0xf6
 #define OP_ILI9341_TEARING_EFFECT_LINE_ON	0x35
 
+struct qpic_pinctrl_res {
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *gpio_state_active;
+	struct pinctrl_state *gpio_state_suspend;
+};
+
 struct qpic_panel_io_desc {
 	int rst_gpio;
 	int cs_gpio;
@@ -118,6 +124,8 @@ struct qpic_panel_io_desc {
 	struct regulator *vdd_vreg;
 	struct regulator *avdd_vreg;
 	u32 init;
+	struct qpic_pinctrl_res pin_res;
+	bool splash_screen_transition;
 };
 
 int mdss_qpic_panel_io_init(struct platform_device *pdev,

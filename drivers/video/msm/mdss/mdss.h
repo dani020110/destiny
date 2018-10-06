@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +26,7 @@
 #include "mdss_panel.h"
 
 #define MAX_DRV_SUP_MMB_BLKS	44
+#define MAX_DRV_SUP_PIPES 10
 
 #define MDSS_PINCTRL_STATE_DEFAULT "mdss_default"
 #define MDSS_PINCTRL_STATE_SLEEP  "mdss_sleep"
@@ -37,6 +38,8 @@ enum mdss_mdp_clk_type {
 	MDSS_CLK_MDP_CORE,
 	MDSS_CLK_MDP_LUT,
 	MDSS_CLK_MDP_VSYNC,
+	MDSS_CLK_MDP_TBU,
+	MDSS_CLK_MDP_TBU_RT,
 	MDSS_MAX_CLK
 };
 
@@ -103,6 +106,16 @@ struct mdss_prefill_data {
 	u32 fbc_lines;
 };
 
+struct mdss_mdp_ppb {
+	u32 ctl_off;
+	u32 cfg_off;
+};
+
+struct mdss_mdp_dsc {
+	u32 num;
+	char __iomem *base;
+};
+
 enum mdss_hw_index {
 	MDSS_HW_MDP,
 	MDSS_HW_DSI0 = 1,
@@ -120,6 +133,13 @@ enum mdss_bus_clients {
 	MDSS_MAX_BUS_CLIENTS
 };
 
+enum mdss_hw_quirk {
+	MDSS_QUIRK_BWCPANIC,
+	MDSS_QUIRK_DOWNSCALE_HANG,
+	MDSS_QUIRK_SVS_PLUS_VOTING,
+	MDSS_QUIRK_MAX,
+};
+
 struct mdss_data_type {
 	u32 mdp_rev;
 	struct clk *mdp_clk[MDSS_MAX_CLK];
@@ -127,9 +147,9 @@ struct mdss_data_type {
 	struct regulator *vdd_cx;
 	bool batfet_required;
 	struct regulator *batfet;
+	bool en_svs_high;
 	u32 max_mdp_clk_rate;
 	struct mdss_util_intf *mdss_util;
-	struct mdss_panel_data *pdata;
 
 	struct platform_device *pdev;
 	struct dss_io_data mdss_io;
@@ -137,9 +157,27 @@ struct mdss_data_type {
 	struct dss_io_data vbif_nrt_io;
 	char __iomem *mdp_base;
 
+	/* Used to store if vote to enable svs plus has been sent or not */
+	u32 svs_plus_vote;
+	/* Min rate from where SVS plus vote is needed */
+	u32 svs_plus_min;
+	/* Max rate till where SVS plus vote is needed */
+	u32 svs_plus_max;
+
 	struct mutex reg_lock;
 
+	/* bitmap to track pipes that have BWC enabled */
+	DECLARE_BITMAP(bwc_enable_map, MAX_DRV_SUP_PIPES);
+	/* bitmap to track hw workarounds */
+	DECLARE_BITMAP(mdss_quirk_map, MDSS_QUIRK_MAX);
+	/* bitmap to track total mmbs in use */
+	DECLARE_BITMAP(mmb_alloc_map, MAX_DRV_SUP_MMB_BLKS);
+
 	u32 has_bwc;
+	u32 default_panic_lut0;
+	u32 default_panic_lut1;
+	u32 default_robust_lut;
+
 	u32 has_decimation;
 	bool has_fixed_qos_arbiter_enabled;
 	bool has_panic_ctrl;
@@ -150,11 +188,15 @@ struct mdss_data_type {
 	u8 has_non_scalar_rgb;
 	bool has_src_split;
 	bool idle_pc_enabled;
-	bool has_dst_split;
+	bool needs_iommu_bw_vote;
+	bool has_pingpong_split;
 	bool has_pixel_ram;
 	bool needs_hist_vote;
+	bool has_10_bit_pa;
 
-	u32 rotator_ot_limit;
+	u32 default_ot_rd_limit;
+	u32 default_ot_wr_limit;
+
 	u32 mdp_irq_mask;
 	u32 mdp_hist_irq_mask;
 
@@ -164,6 +206,7 @@ struct mdss_data_type {
 	u8 vsync_ena;
 
 	struct notifier_block gdsc_cb;
+	struct notifier_block tlb_timeout_cb;
 
 	u32 res_init;
 
@@ -186,6 +229,8 @@ struct mdss_data_type {
 	u32 *vbif_rt_qos;
 	u32 *vbif_nrt_qos;
 	u32 npriority_lvl;
+	u32 bus_bw_cnt;
+	struct mutex bus_bw_lock;
 
 	u32 reg_bus_hdl;
 
@@ -201,6 +246,7 @@ struct mdss_data_type {
 
 	u32 enable_bw_release;
 	u32 enable_rotator_bw_release;
+	u32 serialize_wait4pp;
 
 	struct mdss_hw_settings *hw_settings;
 
@@ -215,13 +261,16 @@ struct mdss_data_type {
 	u8  ncursor_pipes;
 	u32 max_cursor_size;
 
-	DECLARE_BITMAP(mmb_alloc_map, MAX_DRV_SUP_MMB_BLKS);
+	u32 nppb;
+	struct mdss_mdp_ppb *ppb;
+	char __iomem *slave_pingpong_base;
 
 	struct mdss_mdp_mixer *mixer_intf;
 	struct mdss_mdp_mixer *mixer_wb;
 	u32 nmixers_intf;
 	u32 nmixers_wb;
 	u32 max_mixer_width;
+	u32 max_pipe_width;
 
 	struct mdss_mdp_ctl *ctl_off;
 	u32 nctl;
@@ -232,8 +281,6 @@ struct mdss_data_type {
 	u32 ndp;
 	void *video_intf;
 	u32 nintf;
-
-	int pp_enable;
 
 	struct mdss_mdp_ad *ad_off;
 	struct mdss_ad_info *ad_cfgs;
@@ -247,19 +294,26 @@ struct mdss_data_type {
 	int iommu_attached;
 	struct mdss_iommu_map_type *iommu_map;
 
+	struct debug_bus *dbg_bus;
+	u32 dbg_bus_size;
 	struct mdss_debug_inf debug_inf;
 	bool mixer_switched;
 	struct mdss_panel_cfg pan_cfg;
 	struct mdss_prefill_data prefill_data;
+	u32 min_prefill_lines; /* this changes within different chipsets */
+	u32 props;
 
 	int handoff_pending;
 	bool idle_pc;
+	bool allow_cx_vddmin;
+	bool vdd_cx_en;
 	struct mdss_perf_tune perf_tune;
 	bool traffic_shaper_en;
 	int iommu_ref_cnt;
 	u32 latency_buff_per;
 	atomic_t active_intf_cnt;
 	bool has_rot_dwnscale;
+	bool regulator_notif_register;
 
 	u64 ab[MDSS_MAX_BUS_CLIENTS];
 	u64 ib[MDSS_MAX_BUS_CLIENTS];
@@ -271,6 +325,13 @@ struct mdss_data_type {
 	struct mdss_max_bw_settings *max_per_pipe_bw_settings;
 	u32 mdss_per_pipe_bw_cnt;
 	u32 min_bw_per_pipe;
+
+	u32 bcolor0;
+	u32 bcolor1;
+	u32 bcolor2;
+	struct mdss_mdp_dsc *dsc_off;
+	u32 ndsc;
+
 };
 extern struct mdss_data_type *mdss_res;
 
@@ -303,10 +364,12 @@ struct mdss_util_intf {
 	int (*get_iommu_domain)(u32 type);
 	int (*iommu_attached)(void);
 	int (*iommu_ctrl)(int enable);
+	void (*iommu_lock)(void);
+	void (*iommu_unlock)(void);
 	void (*bus_bandwidth_ctrl)(int enable);
 	int (*bus_scale_set_quota)(int client, u64 ab_quota, u64 ib_quota);
+	int (*panel_intf_status)(u32 disp_num, u32 intf_type);
 	struct mdss_panel_cfg* (*panel_intf_type)(int intf_val);
-	int (*dyn_clk_gating_ctrl)(int enable);
 };
 
 struct mdss_util_intf *mdss_get_util_intf(void);
@@ -335,6 +398,18 @@ static inline int mdss_get_sd_client_cnt(void)
 		return 0;
 	else
 		return atomic_read(&mdss_res->sd_client_count);
+}
+
+static inline void mdss_set_quirk(struct mdss_data_type *mdata,
+	enum mdss_hw_quirk bit)
+{
+	set_bit(bit, mdata->mdss_quirk_map);
+}
+
+static inline bool mdss_has_quirk(struct mdss_data_type *mdata,
+	enum mdss_hw_quirk bit)
+{
+	return test_bit(bit, mdata->mdss_quirk_map);
 }
 
 #define MDSS_VBIF_WRITE(mdata, offset, value, nrt_vbif) \

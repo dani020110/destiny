@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,10 +28,11 @@ static inline const char *mdss_mdp_pipetype2str(u32 ptype)
 		PIPE_TYPE(VIG),
 		PIPE_TYPE(RGB),
 		PIPE_TYPE(DMA),
+		PIPE_TYPE(CURSOR),
 #undef PIPE_TYPE
 	};
 
-	if (ptype >= ARRAY_SIZE(strings))
+	if (ptype >= ARRAY_SIZE(strings) || !strings[ptype])
 		return "UNKOWN";
 
 	return strings[ptype];
@@ -62,12 +63,14 @@ static inline const char *mdss_mdp_format2str(u32 format)
 #undef FORMAT_NAME
 	};
 
-	if (format >= ARRAY_SIZE(strings))
+	if (format >= ARRAY_SIZE(strings) || !strings[format])
 		return "UNKOWN";
 
 	return strings[format];
 }
 void mdss_mdp_dump(struct mdss_data_type *mdata);
+void mdss_mdp_hw_rev_debug_caps_init(struct mdss_data_type *mdata);
+
 
 #ifdef CONFIG_DEBUG_FS
 int mdss_mdp_debugfs_init(struct mdss_data_type *mdata);

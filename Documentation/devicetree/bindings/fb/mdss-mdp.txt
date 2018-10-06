@@ -106,6 +106,14 @@ Required properties
 				to the respective cursor pipes. Number of xin ids
 				defined should match the number of offsets
 				defined in property: qcom,mdss-pipe-cursor-off
+- qcom,mdss-pipe-cursor-clk-ctrl-off: Array of offsets describing clk control
+				offsets for dynamic clock gating. 1st value
+				in the array represents offset of the control
+				register. 2nd value represents bit offset within
+				control register and 3rd value represents bit
+				offset within status register. Number of tuples
+				defined should match the number of offsets
+				defined in property: qcom,mdss-pipe-cursor-off
 - qcom,mdss-ctl-off:		Array of offset addresses for the available ctl
 				hw blocks within MDP, these offsets are
 				calculated from register "mdp_phys" defined in
@@ -304,6 +312,9 @@ Optional properties:
 - qcom,mdss-no-hist-vote	Boolean property to indicate histogram reads
 				and histogram LUT writes do not need additional
 				bandwidth voting.
+- qcom,mdss-has-10bit-pa:	Boolean property to indicate PA block is 10 bit
+				rather than 8 bit. This is required for
+				calculating shift while programming PA LUT.
 - qcom,mdss-mdp-wfd-mode:	A string that specifies what is the mode of
 				   writeback wfd block.
 				"intf" = Writeback wfd block is
@@ -312,6 +323,9 @@ Optional properties:
 				   between wfd and rotator.
 				"dedicated" = Dedicated writeback
 				   block for wfd using writeback mixer.
+				"intf_no_dspp" = Writeback wfd block is
+				  connected to the interface mixer without
+				  dspp.
 - qcom,mdss-smp-mb-per-pipe:	Maximum number of shared memory pool blocks
 				restricted for a source surface pipe. If this
 				property is not specified, no such restriction
@@ -344,12 +358,23 @@ Optional properties:
 				   sw_reset register bitmap. Number of offsets
 				   defined should match the number of offsets
 				   defined in property: qcom,mdss-pipe-dma-off
-- qcom,mdss-rotator-ot-limit:	This integer value indicates maximum number of pending
-				writes that can be allowed from rotator client. Default
-				value is 16 which is the maximum. This value can be
-				used to reduce the pending writes limit dynamically
-				and can be tuned to match performance requirements
-				depending upon system state.
+- qcom,mdss-default-ot-wr-limit: This integer value indicates maximum number of pending
+				writes that can be allowed from non real time client.
+				This value can be used to reduce the pending writes
+				limit and can be tuned to match performance
+				requirements depending upon system state.
+				Some platforms require a dynamic ot limiting in
+				some cases. Setting this default ot write limit
+				will enable this dynamic limiting for the write
+				operations in the platforms that require these
+				limits.
+- qcom,mdss-default-ot-rd-limit: This integer value indicates the default number of pending
+				reads that can be allowed for the real time clients.
+				Some platforms require a dynamic ot limiting in
+				some cases. Setting this default ot read limit
+				will enable this dynamic limiting for the read
+				operations in the platforms that require these
+				limits.
 - qcom,mdss-clk-levels:		This array indicates the mdp core clock level selection
 				array. Core clock is calculated for each frame and
 				hence depending upon calculated value, clock rate
@@ -366,6 +391,10 @@ Optional properties:
 				    clients.
 - qcom,mdss-dram-channels:	This represents the number of channels in the
 				Bus memory controller.
+- qcom,mdss-ppb-off:		Array of offset addresses of ping pong buffer control registers.
+				The offsets are calculated from the "mdp_phys" base address
+				specified. The number of offsets should match the
+				number of ping pong buffers available in the hardware.
 - qcom,regs-dump-mdp:		This array represents the registers offsets that
 				will be dumped from the mdp when the debug logging
 				is enabled; each entry in the table is an start and
@@ -419,12 +448,12 @@ Fudge Factors:			Fudge factors are used to boost demand for
 				be more tolerant to memory latency such as
 				command mode panels.
 - qcom,max-bandwidth-per-pipe-kbps: A two dimensional array indicating the max
-				bandwidth in KB that a single pipe can support
-				without underflow for various usecases. The
-				first parameter indicates the usecase and the
-				second parameter gives the max bw allowed for
-				the usecase. Following are the enum values for
-				modes in different cases:
+				bandwidth in KB that a single pipe can support without
+				underflow for various usecases. The first
+				parameter indicates the usecase and the second
+				parameter gives the max bw allowed for the
+				usecase. Following are the enum values for modes
+				in different cases:
 				For default case, mode = 1
 				camera usecase, mode = 2
 				hflip usecase, mode = 4
@@ -450,6 +479,8 @@ Fudge Factors:			Fudge factors are used to boost demand for
 
 - qcom,mdss-has-panic-ctrl: Boolean property to indicate if panic/robust signal
 				control feature is available or not.
+- qcom,mdss-en-svs-high: Boolean property to indicate if this target needs to
+				enable the svs high voltage level for CX rail.
 - qcom,mdss-pipe-vig-panic-ctrl-offsets: Array of panic/robust signal offsets
 				corresponding to the respective VIG pipes.
 				Number of signal offsets should match the
@@ -467,6 +498,20 @@ Fudge Factors:			Fudge factors are used to boost demand for
 				qcom,mdss-pipe-dma-off
 - qcom,mdss-has-dst-split:	Boolean property to indicate if destination
 				split feature is available or not in the target.
+- qcom,mdss-dsc-off:            Array of offset addresses for the available
+				display stream compression module block.
+				These offsets will be calculated from
+				register "mdp_phys" define in reg property. The
+				number of dsc offsets should reflect the number
+				of dsc blocks present in hardware.
+- qcom,max-pipe-width:		This value specifies the maximum MDP SSPP width
+				the device supports. If not specified, a default value
+				of 2048 will be applied.
+- qcom,mdss-slave-pingpong-off:	Offset address for the extra TE block which needs
+				to be programmed when pingpong split feature is enabled.
+				Offset is calculated from the "mdp_phys"
+				register value. Mandatory when qcom,mdss-has-dst-split
+				is enabled.
 
 Optional subnodes:
 Child nodes representing the frame buffer virtual devices.
@@ -520,15 +565,25 @@ Subnode properties:
 - qcom,mdss-idle-power-collapse-enabled: Boolean property that enables support
 					for mdss power collapse in idle
 					screen use cases with smart panels.
+- qcom,boot-indication-enabled: Boolean property that enables turning on the blue
+				LED for notifying that the device is in boot
+				process.
+- qcom,mdss-needs-iommu-bw-vote: Boolean property to indicate if minimum bus
+				bandwidth vote is needed for MDSS to perform
+				IOMMU transactions.
 - qcom,mdss-fb-format:	String property describing MDSS frame buffer format.
 			Based on the current software implementation,
 			possible values are,
 			- "rgba8888"
 			- "rgb888"
 			- "rgb565"
-- qcom,boot-indication-enabled: Boolean property that enables turning on the blue
-				LED for notifying that the device is in boot
-				process.
+
+Subnode properties:
+Required properties:
+- compatible :          Must be "qcom,mdss_wb"
+- qcom,mdss_pan_res:    Specifies size of writeback buffer.
+- qcom,mdss_pan_bpp:    Specifies bits per pixel for writeback buffer.
+- qcom,mdss-fb-map:     Specific framebuffer number.
 
 Example:
 	mdss_mdp: qcom,mdss_mdp@fd900000 {
@@ -567,14 +622,15 @@ Example:
 
 		qcom,max-bandwidth-low-kbps = <2300000>;
 		qcom,max-bandwidth-high-kbps = <3000000>;
-		qcom,max-bandwidth-per-pipe-kbps = <4 2100000>,
-						   <8 1800000>;
+		qcom,max-bandwidth-per-pipe-kbps = <0 2100000>,
+						   <1 1800000>;
 		qcom,max-bw-settings = <1 2300000>,
 				       <2 1700000>,
 				       <4 2300000>,
 				       <8 2000000>;
 
 		qcom,max-mixer-width = <2048>;
+		qcom,max-pipe-width = <2048>;
 		qcom,max-clk-rate = <320000000>;
 		qcom,vbif-settings = <0x0004 0x00000001>,
 				     <0x00D8 0x00000707>;
@@ -588,6 +644,7 @@ Example:
 					  0x00002600>;
 		qcom,mdss-pipe-dma-off = <0x00002A00 0x00002E00>;
 		qcom,mdss-pipe-cursor-off = <0x00035000 0x00037000>;
+		qcom,mdss-dsc-off = <0x00081000 0x00081400>;
 		qcom,mdss-pipe-vig-fetch-id = <1 4 7>;
 		qcom,mdss-pipe-rgb-fetch-id = <16 17 18>;
 		qcom,mdss-pipe-dma-fetch-id = <10 13>;
@@ -612,6 +669,7 @@ Example:
 		qcom,mdss-wfd-mode = "intf";
 		qcom,mdss-no-lut-read;
 		qcom,mdss-no-hist-vote;
+		qcom,mdss-has-10bit-pa;
 		qcom,mdss-traffic-shaper-enabled;
 		qcom,mdss-has-rotator-downscale;
 
@@ -655,6 +713,8 @@ Example:
 				    0x00017100 0x00019100>;
 		qcom,mdss-intf-off = <0x00021100 0x00021300
 					   0x00021500 0x00021700>;
+		qcom,mdss-ppb-off = <0x0000420>;
+		qcom,mdss-slave-pingpong-off = <0x00073000>
 
 		/* buffer parameters to calculate prefill bandwidth */
 		qcom,mdss-prefill-outstanding-buffer-bytes = <1024>;
@@ -665,6 +725,7 @@ Example:
 		qcom,mdss-prefill-pingpong-buffer-pixels = <5120>;
 		qcom,mdss-prefill-fbc-lines = <2>;
 		qcom,mdss-idle-power-collapse-enabled;
+		qcom,mdss-needs-iommu-bw-vote;
 
 		mdss_fb0: qcom,mdss_fb_primary {
 			cell-index = <0>;
@@ -677,6 +738,13 @@ Example:
 			qcom,cont-splash-memory {
 				linux,contiguous-region = <&cont_splash_mem>;
 			};
+		};
+
+		qcom,mdss_wb_panel {
+			compatible = "qcom,mdss_wb";
+			qcom,mdss_pan_res = <1280 720>;
+			qcom,mdss_pan_bpp = <24>;
+			qcom,mdss-fb-map = <&mdss_fb1>;
 		};
 	};
 

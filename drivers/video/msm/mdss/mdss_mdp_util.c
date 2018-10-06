@@ -29,9 +29,7 @@
 #include "mdss_mdp.h"
 #include "mdss_mdp_formats.h"
 #include "mdss_debug.h"
-
-u32 mdp_drm_intr_status;
-EXPORT_SYMBOL(mdp_drm_intr_status);
+#include "mdss_panel.h"
 
 enum {
 	MDP_INTR_VSYNC_INTF_0,
@@ -138,7 +136,6 @@ irqreturn_t mdss_mdp_isr(int irq, void *ptr)
 	if (isr == 0)
 		goto mdp_isr_done;
 
-	mdp_drm_intr_status = isr;
 
 	mask = readl_relaxed(mdata->mdp_base + MDSS_MDP_REG_INTR_EN);
 	writel_relaxed(isr, mdata->mdp_base + MDSS_MDP_REG_INTR_CLEAR);
@@ -215,7 +212,8 @@ irqreturn_t mdss_mdp_isr(int irq, void *ptr)
 		mdss_misr_crc_collect(mdata, DISPLAY_MISR_MDP);
 	}
 
-	if (isr & ((mdata->mdp_rev == MDSS_MDP_HW_REV_108) ?
+	if (isr & (((mdata->mdp_rev == MDSS_MDP_HW_REV_108) ||
+			(mdata->mdp_rev == MDSS_MDP_HW_REV_111)) ?
 		MDSS_MDP_INTR_WB_2_DONE >> 2 : MDSS_MDP_INTR_WB_2_DONE)) {
 		mdss_mdp_intr_done(MDP_INTR_WB_2);
 		mdss_misr_crc_collect(mdata, DISPLAY_MISR_MDP);
@@ -285,6 +283,110 @@ void mdss_mdp_crop_rect(struct mdss_rect *src_rect,
 			{(res.x - sci_rect->x), (res.y - sci_rect->y),
 			res.w, res.h};
 	}
+}
+
+/*
+ * rect_copy_mdp_to_mdss() - copy mdp_rect struct to mdss_rect
+ * @mdp  - pointer to mdp_rect, destination of the copy
+ * @mdss - pointer to mdss_rect, source of the copy
+ */
+void rect_copy_mdss_to_mdp(struct mdp_rect *mdp, struct mdss_rect *mdss)
+{
+	mdp->x = mdss->x;
+	mdp->y = mdss->y;
+	mdp->w = mdss->w;
+	mdp->h = mdss->h;
+}
+
+/*
+ * rect_copy_mdp_to_mdss() - copy mdp_rect struct to mdss_rect
+ * @mdp  - pointer to mdp_rect, source of the copy
+ * @mdss - pointer to mdss_rect, destination of the copy
+ */
+void rect_copy_mdp_to_mdss(struct mdp_rect *mdp, struct mdss_rect *mdss)
+{
+	mdss->x = mdp->x;
+	mdss->y = mdp->y;
+	mdss->w = mdp->w;
+	mdss->h = mdp->h;
+}
+
+/*
+ * mdss_rect_cmp() - compares two rects
+ * @rect1 - rect value to compare
+ * @rect2 - rect value to compare
+ *
+ * Returns 1 if the rects are same, 0 otherwise.
+ */
+int mdss_rect_cmp(struct mdss_rect *rect1, struct mdss_rect *rect2)
+{
+	return rect1->x == rect2->x && rect1->y == rect2->y &&
+	       rect1->w == rect2->w && rect1->h == rect2->h;
+}
+
+/*
+ * mdss_rect_overlap_check() - compare two rects and check if they overlap
+ * @rect1 - rect value to compare
+ * @rect2 - rect value to compare
+ *
+ * Returns true if rects overlap, false otherwise.
+ */
+bool mdss_rect_overlap_check(struct mdss_rect *rect1, struct mdss_rect *rect2)
+{
+	u32 rect1_left = rect1->x, rect1_right = rect1->x + rect1->w;
+	u32 rect1_top = rect1->y, rect1_bottom = rect1->y + rect1->h;
+	u32 rect2_left = rect2->x, rect2_right = rect2->x + rect2->w;
+	u32 rect2_top = rect2->y, rect2_bottom = rect2->y + rect2->h;
+
+	if ((rect1_right <= rect2_left) ||
+	    (rect1_left >= rect2_right) ||
+	    (rect1_bottom <= rect2_top) ||
+	    (rect1_top >= rect2_bottom))
+		return false;
+
+	return true;
+}
+
+/*
+ * mdss_rect_split() - split roi into two with regards to split-point.
+ * @in_roi - input roi, non-split
+ * @l_roi  - left roi after split
+ * @r_roi  - right roi after split
+ *
+ * Split input ROI into left and right ROIs with respect to split-point. This
+ * is useful during partial update with ping-pong split enabled, where user-land
+ * program is aware of only one frame-buffer but physically there are two
+ * distinct panels which requires their own ROIs.
+ */
+void mdss_rect_split(struct mdss_rect *in_roi, struct mdss_rect *l_roi,
+	struct mdss_rect *r_roi, u32 splitpoint)
+{
+	memset(l_roi, 0x0, sizeof(*l_roi));
+	memset(r_roi, 0x0, sizeof(*r_roi));
+
+	/* left update needed */
+	if (in_roi->x < splitpoint) {
+		*l_roi = *in_roi;
+
+		if ((l_roi->x + l_roi->w) >= splitpoint)
+			l_roi->w = splitpoint - in_roi->x;
+	}
+
+	/* right update needed */
+	if ((in_roi->x + in_roi->w) > splitpoint) {
+		*r_roi = *in_roi;
+
+		if (in_roi->x < splitpoint) {
+			r_roi->x = 0;
+			r_roi->w = in_roi->x + in_roi->w - splitpoint;
+		} else {
+			r_roi->x = in_roi->x - splitpoint;
+		}
+	}
+
+	pr_debug("left: %d,%d,%d,%d right: %d,%d,%d,%d\n",
+		l_roi->x, l_roi->y, l_roi->w, l_roi->h,
+		r_roi->x, r_roi->y, r_roi->w, r_roi->h);
 }
 
 int mdss_mdp_get_rau_strides(u32 w, u32 h,
@@ -370,8 +472,11 @@ int mdss_mdp_get_plane_sizes(u32 format, u32 w, u32 h,
 			ps->num_planes = 1;
 			ps->plane_size[0] = w * h * bpp;
 			ps->ystride[0] = w * bpp;
-		} else if (format == MDP_Y_CBCR_H2V2_VENUS) {
-			int cf = COLOR_FMT_NV12;
+		} else if (format == MDP_Y_CBCR_H2V2_VENUS ||
+				format == MDP_Y_CRCB_H2V2_VENUS) {
+
+			int cf = (format == MDP_Y_CBCR_H2V2_VENUS) ?
+					COLOR_FMT_NV12 : COLOR_FMT_NV21;
 			ps->num_planes = 2;
 			ps->ystride[0] = VENUS_Y_STRIDE(cf, w);
 			ps->ystride[1] = VENUS_UV_STRIDE(cf, w);
@@ -558,7 +663,7 @@ static int mdss_mdp_get_img(struct msmfb_data *img,
 	if (img->flags & MDP_BLIT_SRC_GEM) {
 		data->srcp_file = NULL;
 		ret = kgsl_gem_obj_addr(img->memory_id, (int) img->priv,
-					(unsigned long *)start, len);
+					start, len);
 	} else if (img->flags & MDP_MEMORY_ID_TYPE_FB) {
 		file = fget_light(img->memory_id, &data->p_need);
 		if (file == NULL) {
@@ -603,8 +708,9 @@ static int mdss_mdp_get_img(struct msmfb_data *img,
 		data->addr += data->offset;
 		data->len -= data->offset;
 
-		pr_debug("mem=%d ihdl=%pK buf=0x%pa len=0x%lu\n", img->memory_id,
-			 data->srcp_ihdl, &data->addr, data->len);
+		pr_debug("mem=%d ihdl=%pK buf=0x%pa len=0x%lx\n",
+			 img->memory_id, data->srcp_ihdl, &data->addr,
+			 data->len);
 	} else {
 		mdss_mdp_put_img(data);
 		return ret ? : -EOVERFLOW;
@@ -657,7 +763,7 @@ static int mdss_mdp_map_buffer(struct mdss_mdp_img_data *data)
 		data->addr += data->offset;
 		data->len -= data->offset;
 
-		pr_debug("ihdl=%pK buf=0x%pa len=0x%lu\n",
+		pr_debug("ihdl=%pK buf=0x%pa len=0x%lx\n",
 			 data->srcp_ihdl, &data->addr, data->len);
 	} else {
 		mdss_mdp_put_img(data);
@@ -728,8 +834,8 @@ void mdss_mdp_data_free(struct mdss_mdp_data *data)
 
 int mdss_mdp_calc_phase_step(u32 src, u32 dst, u32 *out_phase)
 {
-	u32 unit, residue, result;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+	u32 unit, residue, result;
 
 	if (src == 0 || dst == 0)
 		return -EINVAL;
@@ -738,7 +844,7 @@ int mdss_mdp_calc_phase_step(u32 src, u32 dst, u32 *out_phase)
 	*out_phase = mult_frac(unit, src, dst);
 
 	/* check if overflow is possible */
-	if ((mdata->mdp_rev < MDSS_MDP_HW_REV_103) && src > dst) {
+	if (mdss_has_quirk(mdata, MDSS_QUIRK_DOWNSCALE_HANG) && src > dst) {
 		residue = *out_phase - unit;
 		result = (residue * dst) + residue;
 

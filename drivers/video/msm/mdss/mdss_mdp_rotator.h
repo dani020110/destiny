@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, 2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +21,6 @@
 
 struct mdss_mdp_rotator_session {
 	u32 session_id;
-	u32 ref_cnt;
 	u32 params_changed;
 	int pid;
 
@@ -36,7 +35,6 @@ struct mdss_mdp_rotator_session {
 	u32 dnsc_factor_h;
 
 	u32 bwc_mode;
-	struct mdss_mdp_pipe *pipe;
 
 	struct mutex lock;
 	u8 busy;
@@ -46,12 +44,14 @@ struct mdss_mdp_rotator_session {
 	struct mdss_mdp_data dst_buf;
 
 	bool use_sync_pt;
-	bool fence_release;
 	struct list_head head;
 	struct list_head list;
-	struct mdss_mdp_rotator_session *next;
 	struct msm_sync_pt_data *rot_sync_pt_data;
 	struct work_struct commit_work;
+
+	struct mdp_overlay req_data;
+
+	u32 frame_rate;
 };
 
 static inline u32 mdss_mdp_get_rotator_dst_format(u32 in_format, u32 in_rot90,
@@ -70,6 +70,7 @@ static inline u32 mdss_mdp_get_rotator_dst_format(u32 in_format, u32 in_rot90,
 		else
 			return in_format;
 	case MDP_Y_CBCR_H2V2_VENUS:
+	case MDP_Y_CRCB_H2V2_VENUS:
 	case MDP_Y_CBCR_H2V2:
 		if (in_rot90)
 			return MDP_Y_CRCB_H2V2;
@@ -93,4 +94,7 @@ struct msm_sync_pt_data *mdss_mdp_rotator_sync_pt_get(
 int mdss_mdp_rotator_play(struct msm_fb_data_type *mfd,
 			    struct msmfb_overlay_data *req);
 int mdss_mdp_rotator_unset(int ndx);
+
+int mdss_mdp_rot_mgr_init(void);
+
 #endif /* MDSS_MDP_ROTATOR_H */

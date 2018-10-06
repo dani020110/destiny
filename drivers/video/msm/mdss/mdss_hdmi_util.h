@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -207,6 +207,13 @@
 #define HDMI_CEC_RD_TOTAL_RANGE          (0x00000368)
 #define HDMI_CEC_RD_ERR_RESP_LO          (0x0000036C)
 #define HDMI_CEC_WR_CHECK_CONFIG         (0x00000370)
+#define HDMI_INTERNAL_TIMING_MODE        (0x00000374)
+#define HDMI_CTRL_SW_RESET               (0x00000378)
+#define HDMI_CTRL_AUDIO_RESET            (0x0000037C)
+#define HDMI_SCRATCH                     (0x00000380)
+#define HDMI_CLK_CTRL                    (0x00000384)
+#define HDMI_CLK_ACTIVE                  (0x00000388)
+#define HDMI_VBI_CFG                     (0x0000038C)
 
 /* HDMI PHY Registers */
 #define HDMI_PHY_ANA_CFG0                (0x00000000)
@@ -225,9 +232,9 @@
 #define HDCP_KSV_LSB                     (0x000060D8)
 #define HDCP_KSV_MSB                     (0x000060DC)
 
-#define TOP_AND_BOTTOM		0x10
-#define FRAME_PACKING		0x20
-#define SIDE_BY_SIDE_HALF	0x40
+#define TOP_AND_BOTTOM		(1 << HDMI_S3D_TOP_AND_BOTTOM)
+#define FRAME_PACKING		(1 << HDMI_S3D_FRAME_PACKING)
+#define SIDE_BY_SIDE_HALF	(1 << HDMI_S3D_SIDE_BY_SIDE)
 
 #define LPASS_LPAIF_RDDMA_CTL0           (0xFE152000)
 #define LPASS_LPAIF_RDDMA_PER_CNT0       (0x00000014)
@@ -235,7 +242,8 @@
 enum hdmi_tx_feature_type {
 	HDMI_TX_FEAT_EDID,
 	HDMI_TX_FEAT_HDCP,
-	HDMI_TX_FEAT_CEC,
+	HDMI_TX_FEAT_CEC_HW,
+	HDMI_TX_FEAT_CEC_ABST,
 	HDMI_TX_FEAT_MAX,
 };
 
@@ -255,12 +263,20 @@ struct hdmi_tx_ddc_data {
 	int retry;
 };
 
+struct hdmi_util_ds_data {
+	bool ds_registered;
+	u32 ds_max_clk;
+};
+
 /* video timing related utility routines */
-void hdmi_setup_video_mode_lut(void);
-int hdmi_get_video_id_code(struct msm_hdmi_mode_timing_info *timing_in);
-const struct msm_hdmi_mode_timing_info *hdmi_get_supported_mode(u32 mode);
-void hdmi_del_supported_mode(u32 mode);
+int hdmi_get_video_id_code(struct msm_hdmi_mode_timing_info *timing_in,
+	struct hdmi_util_ds_data *ds_data);
+int hdmi_get_supported_mode(struct msm_hdmi_mode_timing_info *info,
+	struct hdmi_util_ds_data *ds_data, u32 mode);
 ssize_t hdmi_get_video_3d_fmt_2string(u32 format, char *buf, u32 size);
+const char *msm_hdmi_mode_2string(u32 mode);
+int hdmi_set_resv_timing_info(struct msm_hdmi_mode_timing_info *mode);
+void hdmi_reset_resv_timing_info(void);
 
 /* todo: Fix this. Right now this is defined in mdss_hdmi_tx.c */
 void *hdmi_get_featuredata_from_sysfs_dev(struct device *device, u32 type);

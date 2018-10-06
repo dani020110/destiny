@@ -1,4 +1,5 @@
-/* Copyright (c) 2007-2014,2016 The Linux Foundation. All rights reserved.
+
+/* Copyright (c) 2007-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -150,7 +151,7 @@ struct mdss_util_intf mdss_util = {
 	.bus_bandwidth_ctrl = NULL,
 	.bus_scale_set_quota = NULL,
 	.panel_intf_type = NULL,
-	.dyn_clk_gating_ctrl = NULL,
+	.panel_intf_status = NULL,
 	.mdp_probe_done = false
 };
 

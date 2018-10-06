@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -393,12 +393,19 @@ static int msm_dsi_wait4video_eng_busy(struct mdss_dsi_ctrl_pdata *ctrl)
 	return rc;
 }
 
-void msm_dsi_host_init(struct mipi_panel_info *pinfo)
+void msm_dsi_host_init(struct mdss_panel_data *pdata)
 {
 	u32 dsi_ctrl, data;
 	unsigned char *ctrl_base = dsi_host_private->dsi_base;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+	struct mipi_panel_info *pinfo;
 
 	pr_debug("msm_dsi_host_init\n");
+
+	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+				panel_data);
+	pinfo  = &pdata->panel_info.mipi;
+
 
 	if (pinfo->mode == DSI_VIDEO_MODE) {
 		data = 0;
@@ -480,7 +487,7 @@ void msm_dsi_host_init(struct mipi_panel_info *pinfo)
 	MIPI_OUTP(ctrl_base + DSI_TRIG_CTRL, data);
 
 	/* DSI_LAN_SWAP_CTRL */
-	MIPI_OUTP(ctrl_base + DSI_LANE_SWAP_CTRL, pinfo->dlane_swap);
+	MIPI_OUTP(ctrl_base + DSI_LANE_SWAP_CTRL, ctrl_pdata->dlane_swap);
 
 	/* clock out ctrl */
 	data = pinfo->t_clk_post & 0x3f;	/* 6 bits */
@@ -1182,7 +1189,7 @@ static int msm_dsi_on(struct mdss_panel_data *pdata)
 	}
 
 	msm_dsi_sw_reset();
-	msm_dsi_host_init(mipi);
+	msm_dsi_host_init(pdata);
 
 	if (mipi->force_clk_lane_hs) {
 		u32 tmp;
@@ -1358,8 +1365,8 @@ int msm_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		dsi_set_tx_power_mode(1);
 
 	if (ret == 0) {
-		if (ctrl_pdata->status_buf.data[0] !=
-						ctrl_pdata->status_value) {
+		if (!mdss_dsi_cmp_panel_reg(ctrl_pdata->status_buf,
+			ctrl_pdata->status_value, 0)) {
 			pr_err("%s: Read back value from panel is incorrect\n",
 								__func__);
 			ret = -EINVAL;
@@ -1444,7 +1451,8 @@ static int msm_dsi_debug_init(void)
 
 	rc = mdss_debug_register_base("dsi0",
 				dsi_host_private->dsi_base,
-				dsi_host_private->dsi_reg_size);
+				dsi_host_private->dsi_reg_size,
+				NULL);
 
 	return rc;
 }
@@ -1616,6 +1624,30 @@ void msm_dsi_ctrl_init(struct mdss_dsi_ctrl_pdata *ctrl)
 	}
 }
 
+static void msm_dsi_parse_lane_swap(struct device_node *np, char *dlane_swap)
+{
+	const char *data;
+
+	*dlane_swap = DSI_LANE_MAP_0123;
+	data = of_get_property(np, "qcom,lane-map", NULL);
+	if (data) {
+		if (!strcmp(data, "lane_map_3012"))
+			*dlane_swap = DSI_LANE_MAP_3012;
+		else if (!strcmp(data, "lane_map_2301"))
+			*dlane_swap = DSI_LANE_MAP_2301;
+		else if (!strcmp(data, "lane_map_1230"))
+			*dlane_swap = DSI_LANE_MAP_1230;
+		else if (!strcmp(data, "lane_map_0321"))
+			*dlane_swap = DSI_LANE_MAP_0321;
+		else if (!strcmp(data, "lane_map_1032"))
+			*dlane_swap = DSI_LANE_MAP_1032;
+		else if (!strcmp(data, "lane_map_2103"))
+			*dlane_swap = DSI_LANE_MAP_2103;
+		else if (!strcmp(data, "lane_map_3210"))
+			*dlane_swap = DSI_LANE_MAP_3210;
+	}
+}
+
 static int msm_dsi_probe(struct platform_device *pdev)
 {
 	struct dsi_interface intf;
@@ -1720,6 +1752,8 @@ static int msm_dsi_probe(struct platform_device *pdev)
 								__func__, rc);
 		goto error_pan_node;
 	}
+
+	msm_dsi_parse_lane_swap(pdev->dev.of_node, &(ctrl_pdata->dlane_swap));
 
 	for (i = 0;  i < DSI_MAX_PM; i++) {
 		rc = msm_dsi_io_init(pdev, &(ctrl_pdata->power_data[i]));

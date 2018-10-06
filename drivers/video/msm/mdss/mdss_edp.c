@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -778,6 +778,7 @@ static int mdss_edp_device_register(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret;
 	u32 tmp;
+	struct device_node *fb_node;
 
 	mdss_edp_edid2pinfo(edp_drv);
 	edp_drv->panel_data.panel_info.bl_min = 1;
@@ -796,7 +797,15 @@ static int mdss_edp_device_register(struct mdss_edp_drv_pdata *edp_drv)
 	edp_drv->panel_data.panel_info.cont_splash_enabled =
 					edp_drv->cont_splash;
 
-	ret = mdss_register_panel(edp_drv->pdev, &edp_drv->panel_data);
+	fb_node = of_parse_phandle(edp_drv->pdev->dev.of_node,
+			"qcom,mdss-fb-map", 0);
+	if (!fb_node) {
+		pr_err("Unable to find fb node for device: %s\n",
+			edp_drv->pdev->name);
+		return -ENODEV;
+	}
+
+	ret = mdss_register_panel(edp_drv->pdev, &edp_drv->panel_data, fb_node);
 	if (ret) {
 		dev_err(&(edp_drv->pdev->dev), "unable to register eDP\n");
 		return ret;
@@ -832,7 +841,7 @@ static int mdss_edp_get_base_address(struct mdss_edp_drv_pdata *edp_drv)
 		(int)edp_drv, (int)edp_drv->base, edp_drv->base_size);
 
 	mdss_debug_register_base("edp",
-			edp_drv->base, edp_drv->base_size);
+			edp_drv->base, edp_drv->base_size, NULL);
 
 	return 0;
 }
@@ -1172,8 +1181,8 @@ static int mdss_edp_probe(struct platform_device *pdev)
 
 	mdss_edp_event_setup(edp_drv);
 
-	edp_drv->cont_splash = of_property_read_bool(pdev->dev.of_node,
-			"qcom,cont-splash-enabled");
+	edp_drv->cont_splash = edp_drv->mdss_util->panel_intf_status(DISPLAY_1,
+		MDSS_PANEL_INTF_EDP) ? true : false;
 
 	/* only need aux and ahb clock for aux channel */
 	mdss_edp_prepare_aux_clocks(edp_drv);

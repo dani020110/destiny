@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -132,6 +132,10 @@ struct mdp_pa_mem_col_cfg32 {
 	uint32_t hue_region;
 	uint32_t sat_region;
 	uint32_t val_region;
+	uint32_t color_adjust_p2;
+	uint32_t blend_gain;
+	uint8_t sat_hold;
+	uint8_t val_hold;
 };
 
 struct mdp_pa_v2_data32 {
@@ -148,6 +152,10 @@ struct mdp_pa_v2_data32 {
 	uint32_t six_zone_thresh;
 	compat_caddr_t six_zone_curve_p0;
 	compat_caddr_t six_zone_curve_p1;
+	uint32_t six_zone_adj_p0;
+	uint32_t six_zone_adj_p1;
+	uint8_t six_zone_sat_hold;
+	uint8_t six_zone_val_hold;
 };
 
 struct mdp_pa_v2_cfg_data32 {
@@ -328,10 +336,6 @@ struct mdss_calib_cfg32 {
 	uint32_t calib_mask;
 };
 
-struct mdp_pp_init_data32 {
-	uint32_t init_request;
-};
-
 struct mdp_histogram_cfg32 {
 	uint32_t ops;
 	uint32_t block;
@@ -378,7 +382,6 @@ struct msmfb_mdp_pp32 {
 		struct mdss_ad_input32 ad_input;
 		struct mdp_calib_config_buffer32 calib_buffer;
 		struct mdp_calib_dcm_state32 calib_dcm;
-		struct mdp_pp_init_data32 init_data;
 	} data;
 };
 
@@ -402,6 +405,7 @@ struct mdp_overlay32 {
 	struct mdp_overlay_pp_params32 overlay_pp_cfg;
 	struct mdp_scale_data scale;
 	uint8_t color_space;
+	uint32_t frame_rate;
 };
 
 struct mdp_overlay_list32 {

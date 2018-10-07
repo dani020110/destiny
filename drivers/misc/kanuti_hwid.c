@@ -35,35 +35,35 @@ struct smem_oem_info {
 static int hwid_get_band(void)
 {
 	switch (gpio) {
-		case 0x00 ... 0x0b:
-		case 0x10 ... 0x1d:
-			band = "RITA";
-			band_id = 0x01;
-			break;
-		case 0x20 ... 0x2e:
-		case 0x30 ... 0x3d:
-		case 0xa9 ... 0xaa:
-			band = "GINA";
-			band_id = 0x02;
-			break;
-		case 0x40 ... 0x4d:
-		case 0x51:
-			band = "REX";
-			band_id = 0x03;
-			break;
-		case 0x52 ... 0x6d:
-			band = "APAC";
-			band_id = 0x04;
-			break;
-		case 0x72 ... 0x76:
-		case 0x78 ... 0x7c:
-			band = "VIV";
-			band_id = 0x05;
-			break;
-		default:
-			band = "UNKNOWN";
-			band_id = 0xff;
-			break;
+	case 0x00 ... 0x0b:
+	case 0x10 ... 0x1d:
+		band = "RITA";
+		band_id = 0x01;
+		break;
+	case 0x20 ... 0x2e:
+	case 0x30 ... 0x3d:
+	case 0xa9 ... 0xaa:
+		band = "GINA";
+		band_id = 0x02;
+		break;
+	case 0x40 ... 0x4d:
+	case 0x51:
+		band = "REX";
+		band_id = 0x03;
+		break;
+	case 0x52 ... 0x6d:
+		band = "APAC";
+		band_id = 0x04;
+		break;
+	case 0x72 ... 0x76:
+	case 0x78 ... 0x7c:
+		band = "VIV";
+		band_id = 0x05;
+		break;
+	default:
+		band = "UNKNOWN";
+		band_id = 0xff;
+		break;
 	}
 
 	return 0;
@@ -165,14 +165,13 @@ static int hwid_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id hwid_match_table[] = {
+static const struct of_device_id hwid_match_table[] = {
 	{ .compatible = "kanuti,hwid" },
 	{},
 };
 
 static struct platform_driver hwid_driver = {
-	.driver =
-	{
+	.driver = {
 		.name = "kanuti_hwid",
 		.of_match_table = hwid_match_table,
 		.owner = THIS_MODULE,
@@ -188,7 +187,7 @@ static int __init hw_id_init(void)
 
 static void __exit hw_id_exit(void)
 {
-	pr_info("%s: \n", __func__);
+	pr_info("%s:\n", __func__);
 	platform_driver_unregister(&hwid_driver);
 	pr_info(KERN_INFO "Kanuti_HWID_exit enter\n");
 }

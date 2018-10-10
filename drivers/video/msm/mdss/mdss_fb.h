@@ -50,6 +50,15 @@
 #define MDP_PP_AD_BL_LINEAR	0x0
 #define MDP_PP_AD_BL_LINEAR_INV	0x1
 
+/* MM-GL-DISPLAY-panel-00+[ */
+#define INIT_IMAGE_FILE "/logo.rle"
+#define SPLASH_RLE_TO_RGBA_IMAGE_HEIGHT 1280
+#define SPLASH_RLE_TO_RGBA_IMAGE_WIDTH	720
+#define SPLASH_RLE_TO_RGBA_IMAGE_BPP 4
+int fih_load_rle_image(const char *filename);
+int fih_dump_framebuffer(char *filename);
+int mdss_load_rle565_image(const char *filename,int clean,struct msm_fb_splash_info *sinfo);
+/* MM-GL-DISPLAY-panel-00+] */
 /**
  * enum mdp_notify_event - Different frame events to indicate frame update state
  *

@@ -224,11 +224,11 @@ static ssize_t ssm_store_set_late_resume_notifications(struct device *pdev,
 }
 
 static struct device_attribute ssm_attrs[] = {
-	__ATTR(enable, 0600, NULL,
+	__ATTR(enable, 0200, NULL,
 			ssm_store_enable),
-	__ATTR(set_request_next_suspend_prepare_notification, 0600, NULL,
+	__ATTR(set_request_next_suspend_prepare_notification, 0200, NULL,
 			ssm_store_request_next_suspend_prepare_notification),
-	__ATTR(set_late_resume_notifications, 0600, NULL,
+	__ATTR(set_late_resume_notifications, 0200, NULL,
 			ssm_store_set_late_resume_notifications),
 };
 
@@ -236,6 +236,7 @@ static int ssm_create_attrs(struct device *dev)
 {
 	unsigned int i;
 	int rc;
+
 	for (i = 0; i < ARRAY_SIZE(ssm_attrs); i++) {
 		rc = device_create_file(dev, &ssm_attrs[i]);
 		if (rc)
@@ -251,6 +252,7 @@ err:
 static void ssm_remove_attrs(struct device *dev)
 {
 	unsigned int i;
+
 	for (i = 0; i < ARRAY_SIZE(ssm_attrs); i++)
 		(void)device_remove_file(dev, &ssm_attrs[i]);
 }

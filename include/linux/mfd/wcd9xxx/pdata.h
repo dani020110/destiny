@@ -136,6 +136,13 @@ struct wcd9xxx_micbias_setting {
 	bool bias2_is_headset_only;
 };
 
+enum codec_variant {
+	WCD9XXX,
+	WCD9330,
+	WCD9335,
+	WCD9326,
+};
+
 struct wcd9xxx_ocp_setting {
 	unsigned int	use_pdata:1; /* 0 - use sys default as recommended */
 	unsigned int	num_attempts:4; /* up to 15 attempts */

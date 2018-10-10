@@ -16,6 +16,7 @@
 #include <sound/soc.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/mfd/wcd9xxx/pdata.h>
 #include <linux/mfd/wcd9xxx/core.h>
 #include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
 #include "wcd9xxx-common-v2.h"

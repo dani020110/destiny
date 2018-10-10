@@ -15,6 +15,7 @@
 #define _WCD9XXX_REGMAP_
 
 #include <linux/regmap.h>
+#include <linux/mfd/wcd9xxx/pdata.h>
 #include <linux/mfd/wcd9xxx/core.h>
 
 typedef int (*regmap_patch_fptr)(struct regmap *, int);

@@ -5617,6 +5617,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SEC_MI2S_RX", NULL, "SEC_MI2S_DL_HL"},
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
 	{"QUAT_MI2S_UL_HL", NULL, "QUAT_MI2S_TX"},
+    /*MM-UW-quat mi2s -fm speaker-00+{ */ 
+	{"QUAT_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
+	/*MM-UW-quat mi2s -fm speaker-00+} */
 
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},

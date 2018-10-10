@@ -67,12 +67,14 @@ enum wcd9xxx_slim_slave_addr_type {
 	WCD9XXX_SLIM_SLAVE_ADDR_TYPE_TAIKO,
 };
 
+/*
 enum codec_variant {
 	WCD9XXX,
 	WCD9330,
 	WCD9335,
 	WCD9326,
 };
+*/
 
 enum {
 	/* INTR_REG 0 */
@@ -289,7 +291,7 @@ struct wcd9xxx {
 	struct wcd9xxx_ch *rx_chs;
 	struct wcd9xxx_ch *tx_chs;
 	u32 mclk_rate;
-	enum codec_variant type;
+//	enum codec_variant type;
 	bool using_regmap;
 	struct regmap *regmap;
 
@@ -309,6 +311,8 @@ int wcd9xxx_interface_reg_read(struct wcd9xxx *wcd9xxx, unsigned short reg);
 int wcd9xxx_interface_reg_write(struct wcd9xxx *wcd9xxx, unsigned short reg,
 		u8 val);
 int wcd9xxx_get_logical_addresses(u8 *pgd_la, u8 *inf_la);
+int wcd9xxx_slim_write_repeat(struct wcd9xxx *wcd9xxx, unsigned short reg,
+			     int bytes, void *src);
 int wcd9xxx_bus_write_repeat(struct wcd9xxx *wcd9xxx, unsigned short reg,
 			     int bytes, void *src);
 int wcd9xxx_slim_reserve_bw(struct wcd9xxx *wcd9xxx,
@@ -322,8 +326,10 @@ int wcd9xxx_slim_bulk_write(struct wcd9xxx *wcd9xxx,
 			    struct wcd9xxx_reg_val *bulk_reg,
 			    unsigned int size, bool interface);
 
+/*
 void wcd9xxx_disable_supplies(struct wcd9xxx *wcd9xxx,
 				     void *pdata);
+*/
 
 int wcd9xxx_disable_static_supplies_to_optimum(struct wcd9xxx *wcd9xxx,
 						void *data);

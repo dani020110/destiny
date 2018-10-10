@@ -168,7 +168,8 @@ static void mdss_dsi_28nm_phy_init(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		MIPI_OUTP((temp_ctrl->phy_io.base) + 0x290, pd->regulator[4]);
 		/* LDO ctrl */
 		if (MIPI_INP(ctrl_pdata->ctrl_base) == MDSS_DSI_HW_REV_103_1)
-			MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x05);
+	//		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x05);
+			MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x15);
 		else
 			MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x0d);
 	} else {

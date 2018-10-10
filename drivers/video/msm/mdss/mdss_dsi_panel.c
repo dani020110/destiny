@@ -37,6 +37,29 @@
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
+struct device_node *gMIPIDSInode;
+
+/*PanelState FLAG use for cyttsp touch driver, anounce touch driver display status*/
+static bool PanelState = 0x1;
+/*display_on_in_boot FLAG will get LK CMD line(display_status=) and passer it */
+bool display_on_in_boot = false;
+/*DisplayGpioInit FLAG use in gpio have initial all uninitial when call gpio setting*/
+static int DisplayGpioInit = 0;
+/*DisplayGpioInit FLAG use in first gpio intial and register gpio goto which state in cool boot*/
+static int DisplayGpioReady = 0;
+
+bool mdss_display_power_state(void)
+{
+	return PanelState;
+}
+EXPORT_SYMBOL(mdss_display_power_state);
+
+bool mdss_display_splash_LK(void)
+{
+	return display_on_in_boot;
+}
+EXPORT_SYMBOL(mdss_display_splash_LK);
+
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
 	if (ctrl->pwm_pmi)
@@ -205,12 +228,21 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	cmdreq.cb = NULL;
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+
+	if(!level)
+		PanelState = 0;
+	else {
+		if(PanelState == 0)
+			PanelState = 1;
+	}
 }
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc = 0;
-
+	/* MM-GL-DISPLAY-panel-00+[ */
+	struct mdss_panel_info *pinfo = NULL;
+	pinfo = &(ctrl_pdata->panel_data.panel_info);
 	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->disp_en_gpio,
 						"disp_enable");
@@ -226,6 +258,37 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			rc);
 		goto rst_gpio_err;
 	}
+	/* MM-GL-DISPLAY-panel-00+[ */
+	if (gpio_is_valid(ctrl_pdata->disp_te_gpio))
+	{
+		if(pinfo->type == MIPI_CMD_PANEL){
+			rc = gpio_request(ctrl_pdata->disp_te_gpio, "disp_te");
+			if (rc) {
+				pr_err("request TE gpio failed, rc=%d\n",
+					rc);
+				goto te_gpio_err;
+			}
+		}
+	}
+	if (gpio_is_valid(ctrl_pdata->disp_n5_gpio))
+	{
+		rc = gpio_request(ctrl_pdata->disp_n5_gpio, "disp_n5");
+		if (rc) {
+			pr_err("request n5 gpio failed, rc=%d\n",
+				rc);
+			goto n5_gpio_err;
+		}
+	}
+	if (gpio_is_valid(ctrl_pdata->disp_p5_gpio))
+	{
+		rc = gpio_request(ctrl_pdata->disp_p5_gpio, "disp_p5");
+		if (rc) {
+			pr_err("request p5 gpio failed, rc=%d\n",
+				rc);
+			goto p5_gpio_err;
+		}
+	}
+
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->bklt_en_gpio,
 						"bklt_enable");
@@ -243,25 +306,37 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto mode_gpio_err;
 		}
 	}
+	DisplayGpioInit = 1;/* MM-GL-DISPLAY-panel-00+ */
 	return rc;
 
+/* MM-GL-DISPLAY-panel-00+] */
 mode_gpio_err:
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
 		gpio_free(ctrl_pdata->bklt_en_gpio);
+/* MM-GL-DISPLAY-panel-00+[ */
 bklt_en_gpio_err:
-	gpio_free(ctrl_pdata->rst_gpio);
-rst_gpio_err:
 	if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
-		gpio_free(ctrl_pdata->disp_en_gpio);
+		gpio_free(ctrl_pdata->disp_en_gpio);	
+p5_gpio_err:
+	gpio_free(ctrl_pdata->disp_p5_gpio);
+n5_gpio_err:
+	gpio_free(ctrl_pdata->disp_n5_gpio);
+te_gpio_err:
+	if (gpio_is_valid(ctrl_pdata->disp_te_gpio))
+		gpio_free(ctrl_pdata->disp_te_gpio);
+rst_gpio_err:
+	gpio_free(ctrl_pdata->rst_gpio);
 disp_en_gpio_err:
 	return rc;
 }
+int is_reset_done = 0;/*MM-GL-DISPLAY-panel-00+*/
 
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *pinfo = NULL;
-	int i, rc = 0;
+	/*MM-GL-DISPLAY-panel-00-*/// int i, rc = 0;
+	int rc = 0;/*MM-GL-DISPLAY-panel-00+*/
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -291,10 +366,29 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_err("gpio request failed\n");
 			return rc;
 		}
+
+		/* MM-GL-DISPLAY-panel-00+[ */
+		/*NOTE: Base on this BSP display initial sequence architecture.
+		LK have initial gpio when boot to kernel don't request gpio.
+		When first power off display, we need to request gpio.
+		Or there is power consumption issue*/
+		if((!DisplayGpioReady)&&(display_on_in_boot))
+		{
+			DisplayGpioReady=1;
+			is_reset_done = 1;
+
+			gpio_set_value((ctrl_pdata->disp_p5_gpio) , 1);
+			gpio_set_value((ctrl_pdata->disp_n5_gpio) , 1);
+//			gpio_set_value((ctrl_pdata->rst_gpio), 1);
+			gpio_direction_output((ctrl_pdata->rst_gpio), 1);
+
+			return rc;
+		}
+		/* MM-GL-DISPLAY-panel-00+] */
 		if (!pinfo->cont_splash_enabled) {
 			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
-
+			/*MM-GL-DISPLAY-panel-00-[*//*
 			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
 				gpio_set_value((ctrl_pdata->rst_gpio),
 					pdata->panel_info.rst_seq[i]);
@@ -302,9 +396,26 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 					usleep(pinfo->rst_seq[i] * 1000);
 			}
 
-			if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
-				gpio_set_value((ctrl_pdata->bklt_en_gpio), 1);
+
+			*//*MM-GL-DISPLAY-panel-00-]*/
 		}
+		/* MM-GL-DISPLAY-panel-00+[ */
+		if (gpio_is_valid(ctrl_pdata->disp_p5_gpio))
+			gpio_set_value((ctrl_pdata->disp_p5_gpio) , 1);
+		/*MM-GL-DISPLAY-panel-01-*///usleep(11000);
+		usleep(16000);/*MM-GL-DISPLAY-panel-01+*/
+		if (gpio_is_valid(ctrl_pdata->disp_n5_gpio))
+			gpio_set_value((ctrl_pdata->disp_n5_gpio) , 1);
+		is_reset_done = 0;
+
+		if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+			gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+		/*MM-GL-DISPLAY-panel-00-[*/
+
+		/*MM-GL-DISPLAY-panel-00+]*/
+
+		if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
+			gpio_set_value((ctrl_pdata->bklt_en_gpio), 1);
 
 		if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
 			if (pinfo->mode_gpio_state == MODE_GPIO_HIGH)
@@ -319,16 +430,47 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_debug("%s: Reset panel done\n", __func__);
 		}
 	} else {
-		if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
-			gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
-			gpio_free(ctrl_pdata->bklt_en_gpio);
+		/* MM-GL-DISPLAY-panel-00+[ */
+		/*NOTE: Base on this BSP display initial sequence architecture.
+		LK have initial gpio when boot to kernel don't request gpio.
+		When first power off display, we need to request gpio.
+		Or there is power consumption issue*/
+		if((DisplayGpioReady==1)&&(display_on_in_boot))
+		{
+			rc = mdss_dsi_request_gpios(ctrl_pdata);
+			DisplayGpioReady=2;
 		}
-		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
-			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
-			gpio_free(ctrl_pdata->disp_en_gpio);
+		if(DisplayGpioInit)
+		{
+			/* MM-GL-DISPLAY-panel-00+] */
+			if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
+				gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
+				gpio_free(ctrl_pdata->bklt_en_gpio);
+			}
+			if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+				gpio_free(ctrl_pdata->disp_en_gpio);
+			}
+			gpio_set_value((ctrl_pdata->rst_gpio), 0);
+			gpio_free(ctrl_pdata->rst_gpio);
+			/* MM-GL-DISPLAY-panel-00+[ */
+			is_reset_done = 0;
+			usleep(1000);
+			if (gpio_is_valid(ctrl_pdata->disp_n5_gpio))
+			{
+				gpio_set_value((ctrl_pdata->disp_n5_gpio) , 0);
+				gpio_free(ctrl_pdata->disp_n5_gpio);
+			}
+			usleep(1000);
+			if (gpio_is_valid(ctrl_pdata->disp_p5_gpio))
+			{
+				gpio_set_value((ctrl_pdata->disp_p5_gpio), 0);
+				gpio_free(ctrl_pdata->disp_p5_gpio);
+			}
+			usleep(10000);
 		}
-		gpio_set_value((ctrl_pdata->rst_gpio), 0);
-		gpio_free(ctrl_pdata->rst_gpio);
+		DisplayGpioInit = 0;
+		/* MM-GL-DISPLAY-panel-00+] */
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
 	}
@@ -620,6 +762,9 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+	if (gpio_is_valid(ctrl->bklt_en_gpio)){
+			gpio_set_value((ctrl->bklt_en_gpio), 1);
+	}
 
 end:
 	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
@@ -632,6 +777,7 @@ static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
 	struct dsi_panel_cmds *on_cmds;
+
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -1142,6 +1288,8 @@ static int mdss_dsi_parse_panel_features(struct device_node *np,
 
 	pinfo->cont_splash_enabled = of_property_read_bool(np,
 		"qcom,cont-splash-enabled");
+
+	pr_err("%s: splash status=%x\n", __func__,pinfo->cont_splash_enabled);
 
 	if (pinfo->mipi.mode == DSI_CMD_MODE) {
 		pinfo->partial_update_enabled = of_property_read_bool(np,
@@ -1774,7 +1922,7 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		"qcom,mdss-dsi-reset-sequence");
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->on_cmds,
-		"qcom,mdss-dsi-on-command", "qcom,mdss-dsi-on-command-state");
+		"qcom,mdss-dsi-on-command-63", "qcom,mdss-dsi-on-command-state");
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->post_panel_on_cmds,
 		"qcom,mdss-dsi-post-panel-on-command", NULL);
@@ -1862,6 +2010,7 @@ int mdss_dsi_panel_init(struct device_node *node,
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
 	}
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);
+	gMIPIDSInode = node;/* MM-GL-DISPLAY-panel-00+ */
 	if (rc) {
 		pr_err("%s:%d panel dt parse failed\n", __func__, __LINE__);
 		return rc;
@@ -1870,6 +2019,8 @@ int mdss_dsi_panel_init(struct device_node *node,
 	mdss_dsi_set_lane_clamp_mask(&pinfo->mipi);
 	if (!cmd_cfg_cont_splash)
 		pinfo->cont_splash_enabled = false;
+	pinfo->cont_splash_enabled = display_on_in_boot;
+
 	pr_info("%s: Continuous splash %s\n", __func__,
 		pinfo->cont_splash_enabled ? "enabled" : "disabled");
 
@@ -1886,3 +2037,13 @@ int mdss_dsi_panel_init(struct device_node *node,
 
 	return 0;
 }
+/* MM-GL-DISPLAY-panel-00+[ */
+static int __init display_on_in_boot_setup(char *str)
+{
+	if(!str)
+		return 0;
+	if(!strncmp(str,"on",2))
+		display_on_in_boot = true;
+	return 0;
+}
+__setup("display_status=",display_on_in_boot_setup);

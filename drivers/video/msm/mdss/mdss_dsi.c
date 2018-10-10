@@ -81,7 +81,6 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		ret = -EINVAL;
 		goto end;
 	}
-
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -117,7 +116,6 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 			pr_err("%s: failed to disable vregs for %s\n",
 				__func__, __mdss_dsi_pm_name(i));
 	}
-
 end:
 	return ret;
 }
@@ -132,7 +130,6 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
-
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -169,6 +166,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	 * bootloader. This needs to be done irresepective of whether
 	 * the lp11_init flag is set or not.
 	 */
+	usleep(6000);/*MM-GL-DISPLAY-panel-00+*/
 	if (pdata->panel_info.cont_splash_enabled ||
 		!pdata->panel_info.mipi.lp11_init) {
 		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
@@ -179,7 +177,6 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 			pr_err("%s: Panel reset failed. rc=%d\n",
 					__func__, ret);
 	}
-
 error:
 	if (ret) {
 		for (; i >= 0; i--)
@@ -206,7 +203,6 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
-
 	pinfo = &pdata->panel_info;
 	pr_debug("%s: cur_power_state=%d req_power_state=%d\n", __func__,
 		pinfo->panel_power_state, power_state);
@@ -242,7 +238,6 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 			__func__, power_state);
 		ret = -EINVAL;
 	}
-
 	if (!ret)
 		pinfo->panel_power_state = power_state;
 
@@ -460,7 +455,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 	int ret = 0;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *panel_info = NULL;
-
+	display_on_in_boot = 0;/* MM-GL-DISPLAY-panel-00+ */
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
@@ -549,7 +544,6 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int cur_power_state;
-
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
@@ -641,7 +635,10 @@ static int mdss_dsi_pinctrl_set_state(
 {
 	struct pinctrl_state *pin_state;
 	int rc = -EFAULT;
-
+	/* MM-GL-DISPLAY-panel-00+[ */
+	if(mdss_display_splash_LK())
+		return 0;
+	/* MM-GL-DISPLAY-panel-00+] */
 	if (IS_ERR_OR_NULL(ctrl_pdata->pin_res.pinctrl))
 		return PTR_ERR(ctrl_pdata->pin_res.pinctrl);
 
@@ -1255,6 +1252,10 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 				  int event, void *arg)
 {
 	int rc = 0;
+	/*MM-GL-DISPLAY-panel-00+[*/
+	int i=0;
+	struct mdss_panel_info *pinfo = NULL;
+	/*MM-GL-DISPLAY-panel-00+]*/
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int power_state;
 
@@ -1279,6 +1280,20 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 							pdata);
 		break;
 	case MDSS_EVENT_UNBLANK:
+/*MM-GL-DISPLAY-panel-00+[*/
+		if(!is_reset_done)
+		{
+			pinfo = &(ctrl_pdata->panel_data.panel_info);
+			usleep(40000);
+			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
+				gpio_set_value((ctrl_pdata->rst_gpio),
+					pdata->panel_info.rst_seq[i]);
+				if (pdata->panel_info.rst_seq[++i])
+					usleep(pinfo->rst_seq[i] * 1000);
+			}
+			is_reset_done = 1;
+		}
+/*MM-GL-DISPLAY-panel-00+]*/
 		if (ctrl_pdata->refresh_clk_rate)
 			rc = mdss_dsi_clk_refresh(pdata);
 		mdss_dsi_get_hw_revision(ctrl_pdata);
@@ -1870,8 +1885,29 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		pr_err("%s:%d, TE gpio not specified\n",
 						__func__, __LINE__);
 
+	ctrl_pdata->disp_p5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-p5-gpio", 0);
+	if (!gpio_is_valid(ctrl_pdata->disp_p5_gpio)) {
+		pr_err("%s:%d, Disp_p5 gpio not specified\n",
+			__func__, __LINE__);
+	}
+	
+	ctrl_pdata->disp_n5_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-n5-1-gpio", 0);
 	ctrl_pdata->bklt_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-bklight-en-gpio", 0);
+
+	if (!gpio_is_valid(ctrl_pdata->disp_n5_gpio)) {
+		pr_err("%s:%d, Disp_n5 gpio not specified\n",
+			__func__, __LINE__);
+	}
+	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-te-gpio", 0);
+	if (!gpio_is_valid(ctrl_pdata->disp_te_gpio)) {
+		pr_err("%s:%d, Disp_te gpio not specified\n",
+			__func__, __LINE__);
+	}
+/* MM-GL-DISPLAY-panel-00+] */
 	if (!gpio_is_valid(ctrl_pdata->bklt_en_gpio))
 		pr_info("%s: bklt_en gpio not specified\n", __func__);
 

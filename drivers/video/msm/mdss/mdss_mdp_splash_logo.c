@@ -28,6 +28,7 @@
 #include "mdss_mdp.h"
 #include "splash.h"
 #include "mdss_mdp_splash_logo.h"
+#include "mdss_dsi.h"
 
 #define INVALID_PIPE_INDEX 0xFFFF
 #define MAX_FRAME_DONE_COUNT_WAIT 2
@@ -596,6 +597,9 @@ static __ref int mdss_mdp_splash_parse_dt(struct msm_fb_data_type *mfd)
 	u32 offsets[2];
 	struct device_node *pnode, *child_node;
 
+	if (!mdss_display_splash_LK()) {
+		mfd->splash_info.splash_logo_enabled =1;
+	} else
 	mfd->splash_info.splash_logo_enabled =
 				of_property_read_bool(pdev->dev.of_node,
 				"qcom,mdss-fb-splash-logo-enabled");

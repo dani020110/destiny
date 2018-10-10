@@ -30,6 +30,10 @@
 #include "venus_hfi.h"
 #include "vidc_hfi_io.h"
 #include "msm_vidc_debug.h"
+/* CORE-EL-power_on_cause-02+[ */
+#include <linux/fih_sw_info.h>
+extern void write_pwron_cause (int pwron_cause);
+/* CORE-EL-power_on_cause-02+] */
 
 #define FIRMWARE_SIZE			0X00A00000
 #define REG_ADDR_OFFSET_BITMASK	0x000FFFFF
@@ -3282,6 +3286,26 @@ static void venus_hfi_process_msg_event_notify(
 				vsfr->rg_data[vsfr->bufSize - 1] = '\0';
 			dprintk(VIDC_ERR, "SFR Message from FW : %s\n",
 				vsfr->rg_data);
+			/* CORE-EL-power_on_cause-02+[ */
+			do {
+				char *ptr = NULL;
+				do {
+					if ((ptr = strstr(vsfr->rg_data, "Err_Fatal")))
+						break;
+					
+					if ((ptr = strstr(vsfr->rg_data, "Exception")))
+						break;
+				} while(0);
+
+				dprintk(VIDC_ERR, "VENUS Fatal Error. Let's note!\n");
+				write_pwron_cause(MODEM_FATAL_ERR);
+				
+				if (ptr)
+					log_ss_failure_reason("VENUS", (u32)(strlen(ptr)),  ptr);
+				else 
+					log_ss_failure_reason("VENUS", 0,  "unknown, empty string found");
+			} while(0);
+			/* CORE-EL-power_on_cause-02+] */			
 		}
 	}
 }
@@ -3326,10 +3350,33 @@ static void venus_hfi_response_handler(struct venus_hfi_device *device)
 				__func__);
 			vsfr = (struct hfi_sfr_struct *)
 					device->sfr.align_virtual_addr;
-			if (vsfr)
+			/* CORE-EL-power_on_cause-02+[ */
+			if (vsfr) {
 				dprintk(VIDC_ERR,
 					"SFR Message from FW : %s\n",
 						vsfr->rg_data);
+				do {
+					char *ptr = NULL;
+					do {
+						if ((ptr = strstr(vsfr->rg_data, "Err_Fatal")))
+							break;
+						
+						if ((ptr = strstr(vsfr->rg_data, "Exception")))
+							break;
+					} while(0);
+
+					dprintk(VIDC_ERR, "VENUS WDOG timeout. Let's note!\n");
+					write_pwron_cause(MODEM_SW_WDOG_EXPIRED);						
+					
+					if (ptr)
+						log_ss_failure_reason("VENUS", (u32)(strlen(ptr)),  ptr);
+					else 
+						log_ss_failure_reason("VENUS", 0,	"unknown, empty string found");
+				
+				} while(0);
+			}	
+			/* CORE-EL-power_on_cause-02+] */			
+			
 			venus_hfi_process_sys_watchdog_timeout(device);
 		}
 

@@ -632,6 +632,15 @@ config KANUTI_HWID
 	  This driver allows you to detect band version and set
 	  it using smem_alloc().
 
+config PN544_NFC
+	bool "NXP PN544 NFC Controller Driver"
+	depends on I2C
+	---help---
+	  NXP PN544 Near Field Communication controller support.
+	  This option enables device driver support for the NFC.
+	  It is used by many services. NFC is fully controlled using I2C
+	  to communicate the AP chip.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

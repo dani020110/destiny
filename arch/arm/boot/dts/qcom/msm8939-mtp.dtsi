@@ -174,7 +174,6 @@
 			interrupts = <21 0x2>;
 			nxp,irq-gpio=<&msm_gpio 21 0>;
 			nxp,vengpio= <&msm_gpio 20 0>;
-			nxp,firmgpio_EVM=<&msm_gpio 112 0>;
 			nxp,firmgpio=<&msm_gpio 120 0>;
 		};
 	};

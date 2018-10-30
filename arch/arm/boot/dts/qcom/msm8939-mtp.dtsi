@@ -222,13 +222,6 @@
 		};
 	};
 
-	keyreset {
-		compatible = "keycombo";
-		down,num = <2>;
-		down,code = <115 116>;
-		down,codeV = <114 116>;
-	};
-
 	i2c@78b6000 { /* BLSP1 QUP2 */
 		bosch@10 {
 			compatible = "bosch,bma2x2";

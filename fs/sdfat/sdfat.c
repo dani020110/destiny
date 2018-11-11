@@ -4979,6 +4979,21 @@ static struct file_system_type sdfat_fs_type = {
 	.fs_flags    = FS_REQUIRES_DEV,
 };
 
+#ifdef CONFIG_SDFAT_COMPAT_TUXERA
+static struct file_system_type texfat_fs_type = {
+	.owner       = THIS_MODULE,
+	.name        = "texfat",
+	.mount       = sdfat_fs_mount,
+#ifdef CONFIG_SDFAT_DBG_IOCTL
+	.kill_sb    = sdfat_debug_kill_sb,
+#else
+	.kill_sb    = kill_block_super,
+#endif /* CONFIG_SDFAT_DBG_IOCTL */
+	.fs_flags    = FS_REQUIRES_DEV,
+};
+MODULE_ALIAS_FS("texfat");
+#endif /* CONFIG_SDFAT_COMPAT_TUXERA */
+
 static int __init init_sdfat_fs(void)
 {
 	int err;
@@ -5017,6 +5032,14 @@ static int __init init_sdfat_fs(void)
 		goto error;
 	}
 
+#ifdef CONFIG_SDFAT_COMPAT_TUXERA
+	err = register_filesystem(&texfat_fs_type);
+	if (err) {
+		pr_err("[SDFAT] failed to register for texfat filesystem\n");
+		goto error;
+	}
+#endif /* CONFIG_SDFAT_COMPAT_TUXERA */
+
 	return 0;
 error:
 	sdfat_statistics_uninit();
@@ -5046,7 +5069,9 @@ static void __exit exit_sdfat_fs(void)
 
 	sdfat_destroy_inodecache();
 	unregister_filesystem(&sdfat_fs_type);
-
+#ifdef CONFIG_SDFAT_COMPAT_TUXERA
+	unregister_filesystem(&texfat_fs_type);
+#endif /* CONFIG_SDFAT_COMPAT_TUXERA */
 	fsapi_shutdown();
 }
 

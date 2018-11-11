@@ -15,6 +15,18 @@ config SDFAT_FS
 	  To compile this as a module, choose M here: the module will be called
 	  sdfat_core and sdfat_fs.
 
+config SDFAT_COMPAT_TUXERA
+	bool "Tuxera compatibility for sdFAT"
+	default n
+	depends on SDFAT_FS && !EXFAT_FS
+	help
+	  Say Y here for the sdFAT driver to register as texfat and
+	  to support extra mount options for drop-in replacement on
+	  systems previously using Tuxera's commercial exFAT driver.
+
+	  If you are building sdFAT as a module, this will change
+	  the module's name to texfat.
+
 config SDFAT_DELAYED_META_DIRTY
 	bool "Enable delayed metadata dirty"
 	default y

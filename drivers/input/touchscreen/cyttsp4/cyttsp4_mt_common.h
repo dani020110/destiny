@@ -27,7 +27,7 @@
  *
  */
 
-#include <linux/cyttsp4_bus.h>
+#include <linux/input/cyttsp4_bus.h>
 
 #include <linux/delay.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -46,8 +46,8 @@
 #include <linux/fb.h>
 
 
-#include <linux/cyttsp4_core.h>
-#include <linux/cyttsp4_mt.h>
+#include <linux/input/cyttsp4_core.h>
+#include <linux/input/cyttsp4_mt.h>
 #include "cyttsp4_regs.h"
 
 struct cyttsp4_mt_data;

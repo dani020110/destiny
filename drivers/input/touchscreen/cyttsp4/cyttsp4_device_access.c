@@ -28,9 +28,9 @@
  *
  */
 
-#include <linux/cyttsp4_bus.h>
-#include <linux/cyttsp4_core.h>
-#include <linux/cyttsp4_mt.h>
+#include <linux/input/cyttsp4_bus.h>
+#include <linux/input/cyttsp4_core.h>
+#include <linux/input/cyttsp4_mt.h>
 
 #include <linux/delay.h>
 #include <linux/gpio.h>

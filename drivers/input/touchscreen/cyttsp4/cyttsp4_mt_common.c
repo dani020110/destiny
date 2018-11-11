@@ -95,6 +95,8 @@ static void cyttsp4_mt_process_touch(struct cyttsp4_mt_data *md,
 		touch->abs[CY_TCH_Y], touch->abs[CY_TCH_Y]);
 }
 
+extern bool glove_mode;
+
 static void cyttsp4_get_mt_touches(struct cyttsp4_mt_data *md, int num_cur_rec)
 {
 	struct device *dev = &md->ttsp->dev;
@@ -443,6 +445,7 @@ static void cyttsp4_setup_early_suspend(struct cyttsp4_mt_data *md)
 }
 
 #elif CONFIG_FB
+void RestoreGloveState(void);
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {
@@ -466,6 +469,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 		{
 			cyttsp4_mt_resume(&(md->ttsp->dev));
 			pr_debug( "ETUCH : Resume\n" );
+			RestoreGloveState();
 		}
 		else if (*blank == FB_BLANK_POWERDOWN && md->is_suspended == false)	/* PERI-FG-TOUCH_SUSPEND-00* */
 		{

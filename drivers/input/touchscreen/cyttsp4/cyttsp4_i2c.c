@@ -30,8 +30,8 @@
  *
  */
 
-#include <linux/cyttsp4_bus.h>
-#include <linux/cyttsp4_core.h>
+#include <linux/input/cyttsp4_bus.h>
+#include <linux/input/cyttsp4_core.h>
 #include "cyttsp4_i2c.h"
 
 #include <linux/delay.h>

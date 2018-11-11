@@ -30,7 +30,7 @@
  *
  */
 
-#include <linux/cyttsp4_bus.h>
+#include <linux/input/cyttsp4_bus.h>
 
 #include <asm/unaligned.h>
 #include <linux/delay.h>
@@ -45,7 +45,7 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 
-#include <linux/cyttsp4_core.h>
+#include <linux/input/cyttsp4_core.h>
 #include "cyttsp4_regs.h"
 
 /* Timeout in ms. */

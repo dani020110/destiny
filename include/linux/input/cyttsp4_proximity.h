@@ -30,7 +30,7 @@
 #ifndef _LINUX_CYTTSP4_PROXIMITY_H
 #define _LINUX_CYTTSP4_PROXIMITY_H
 
-#include <linux/cyttsp4_mt.h>
+#include <linux/input/cyttsp4_mt.h>
 
 #define CYTTSP4_PROXIMITY_NAME "cyttsp4_proximity"
 

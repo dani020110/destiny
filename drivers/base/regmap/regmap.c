@@ -11,6 +11,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/export.h>
 #include <linux/mutex.h>

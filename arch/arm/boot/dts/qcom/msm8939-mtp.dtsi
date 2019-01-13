@@ -491,6 +491,10 @@
 	status = "disabled";
 };
 
+&dsi_nt35521_720_vid {
+	qcom,cont-splash-enabled;
+};
+
 &pm8916_mpps {
 	mpp@a000 { /* MPP 1 */
 		/* VDD_PX */
